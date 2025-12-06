@@ -50,7 +50,7 @@ class XiaoLeAgent:
         self.task_manager = TaskManager(db_config)
 
         # v0.8.0 任务执行器(延迟导入避免循环依赖)
-        from task_executor import TaskExecutor
+        from modules.task_executor import TaskExecutor
         self.task_executor = TaskExecutor(
             self.task_manager, self.tool_registry
         )
@@ -536,7 +536,7 @@ class XiaoLeAgent:
         reminder_keywords = ['提醒', 'remind', '任务', 'task', '待办']
         if any(kw in prompt.lower() for kw in reminder_keywords):
             try:
-                from reminder_manager import get_reminder_manager
+                from modules.reminder_manager import get_reminder_manager
                 reminder_mgr = get_reminder_manager()
                 pending_reminders = reminder_mgr.get_pending_reminders(
                     user_id, limit=3)
@@ -1297,7 +1297,7 @@ class XiaoLeAgent:
 
                 # 同步查询当前提醒数量
                 try:
-                    from reminder_manager import get_reminder_manager
+                    from modules.reminder_manager import get_reminder_manager
                     mgr = get_reminder_manager()
 
                     # ReminderManager是同步方法，直接调用

@@ -82,7 +82,7 @@ class TaskTool(Tool):
             user_id = kwargs.get("user_id", "default_user")
 
             # 延迟导入避免循环依赖
-            from task_manager import get_task_manager
+            from modules.task_manager import get_task_manager
             task_mgr = get_task_manager()
 
             if operation == "create":

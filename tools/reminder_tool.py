@@ -70,7 +70,7 @@ class ReminderTool(Tool):
             operation = kwargs.get("operation", "create")
             user_id = kwargs.get("user_id", "default_user")
 
-            from reminder_manager import get_reminder_manager
+            from modules.reminder_manager import get_reminder_manager
             reminder_mgr = get_reminder_manager()
 
             if operation == "list":

@@ -130,7 +130,7 @@ class ReminderScheduler:
             logger.info("Step 1: Importing database functions")
 
             # 获取所有有提醒的用户
-            from reminder_manager import get_db_connection
+            from modules.reminder_manager import get_db_connection
             from psycopg2.extras import RealDictCursor
             print("==== IMPORTS DONE ====", flush=True)
 
@@ -193,7 +193,7 @@ class ReminderScheduler:
             logger.info("Checking behavior reminders...")
 
             # 获取所有有提醒的用户
-            from reminder_manager import get_db_connection
+            from modules.reminder_manager import get_db_connection
             from psycopg2.extras import RealDictCursor
 
             conn = get_db_connection()
