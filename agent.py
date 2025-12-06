@@ -1,12 +1,12 @@
 from memory import MemoryManager
 from conversation import ConversationManager
-from behavior_analytics import BehaviorAnalyzer
-from proactive_qa import ProactiveQA  # v0.3.0 主动问答
-from pattern_learning import PatternLearner  # v0.3.0 模式学习
-from tool_manager import get_tool_registry  # v0.4.0 工具管理
-from enhanced_intent import EnhancedToolSelector, ContextEnhancer
-from dialogue_enhancer import DialogueEnhancer  # v0.6.0
-from task_manager import TaskManager  # v0.8.0 任务管理
+from modules.behavior_analytics import BehaviorAnalyzer
+from modules.proactive_qa import ProactiveQA  # v0.3.0 主动问答
+from modules.pattern_learning import PatternLearner  # v0.3.0 模式学习
+from modules.tool_manager import get_tool_registry  # v0.4.0 工具管理
+from modules.enhanced_intent import EnhancedToolSelector, ContextEnhancer
+from modules.dialogue_enhancer import DialogueEnhancer  # v0.6.0
+from modules.task_manager import TaskManager  # v0.8.0 任务管理
 from error_handler import (
     retry_with_backoff, log_execution, handle_api_errors,
     logger
@@ -1382,7 +1382,7 @@ class XiaoLeAgent:
                 logger.info(f"🔍 指代性删除任务: '{prompt[:50]}'")
 
                 try:
-                    from task_manager import get_task_manager
+                    from modules.task_manager import get_task_manager
                     mgr = get_task_manager()
 
                     # TaskManager是同步方法，直接调用

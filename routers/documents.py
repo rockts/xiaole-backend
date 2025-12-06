@@ -5,7 +5,7 @@ import time
 import json
 from dependencies import get_xiaole_agent
 from agent import XiaoLeAgent
-from document_summarizer import DocumentSummarizer
+from modules.document_summarizer import DocumentSummarizer
 from config import UPLOADS_DIR, DB_CONFIG
 from auth import get_current_user
 

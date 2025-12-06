@@ -12,11 +12,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-from reminder_manager import get_reminder_manager
-from proactive_chat import get_proactive_chat
+from modules.reminder_manager import get_reminder_manager
+from modules.proactive_chat import get_proactive_chat
 from memory import MemoryManager
 from pathlib import Path
-from conflict_detector import ConflictDetector
+from modules.conflict_detector import ConflictDetector
 
 logger = logging.getLogger(__name__)
 

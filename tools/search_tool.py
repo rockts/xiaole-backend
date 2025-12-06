@@ -5,7 +5,7 @@
 v0.6.1: 升级到ddgs包,改进搜索稳定性
 v0.6.2: 添加代理支持和超时优化
 """
-from tool_manager import Tool, ToolParameter
+from modules.tool_manager import Tool, ToolParameter
 try:
     from duckduckgo_search import DDGS
 except ImportError:

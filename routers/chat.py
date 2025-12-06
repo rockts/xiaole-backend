@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from dependencies import get_xiaole_agent, get_proactive_qa
 from agent import XiaoLeAgent
-from proactive_qa import ProactiveQA
+from modules.proactive_qa import ProactiveQA
 from auth import get_current_user
 from logger import logger
 

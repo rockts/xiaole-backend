@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from reminder_manager import get_reminder_manager, ReminderManager
+from modules.reminder_manager import get_reminder_manager, ReminderManager
 from dependencies import get_scheduler
 from scheduler import ReminderScheduler
 from logger import logger

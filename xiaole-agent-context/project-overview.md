@@ -7,7 +7,11 @@
     └─ .cursorrules 前端 Agent 规则
 
 - xiaole-backend/   后端逻辑
-    └─ src/        后端代码、任务引擎
+    └─ main.py     应用入口
+    └─ agent.py    AI Agent 核心
+    └─ modules/   功能模块（行为分析、任务管理、工具管理等）
+    └─ routers/    API 路由
+    └─ tools/      Agent 工具
     └─ xiaole-agent-context/ Agent 上下文（必须保留）
     └─ .cursorrules 后端 Agent 规则
     └─ docs/       仅保留 DEV_CONTEXT.md（iCloud 同步）

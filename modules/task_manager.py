@@ -292,7 +292,7 @@ class TaskManager:
             if user_id:
                 try:
                     # 延迟导入避免循环依赖
-                    from reminder_manager import get_reminder_manager
+                    from modules.reminder_manager import get_reminder_manager
                     reminder_mgr = get_reminder_manager()
                     # 这是一个私有方法，但为了保持一致性我们需要调用它
                     # 或者我们可以添加一个公共方法 clear_cache(user_id)

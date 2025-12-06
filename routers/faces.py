@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Body, HTTPException
-from face_manager import FaceManager
+from modules.face_manager import FaceManager
 from db_setup import SessionLocal, FaceEncoding
 import os
 

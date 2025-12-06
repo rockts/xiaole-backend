@@ -4,8 +4,8 @@ from dependencies import (
     get_xiaole_agent, get_reminder_manager, get_task_manager
 )
 from agent import XiaoLeAgent
-from reminder_manager import ReminderManager
-from task_manager import TaskManager
+from modules.reminder_manager import ReminderManager
+from modules.task_manager import TaskManager
 from auth import get_current_user
 import psutil
 import os

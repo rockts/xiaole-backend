@@ -1,6 +1,8 @@
 # 项目目录结构
 
 > 最后更新: 2025-12-07
+> 
+> **更新**: 已整理根目录，功能模块移至 `modules/` 目录
 
 ## 目录结构
 
@@ -20,6 +22,26 @@ xiaole-backend/
 ├── conversation.py              # 对话管理
 ├── memory.py                    # 记忆管理
 ├── scheduler.py                 # 定时任务调度
+├── dependencies.py              # 依赖注入
+├── error_handler.py             # 错误处理
+├── db_setup.py                 # 数据库设置
+│
+├── modules/                     # 功能模块
+│   ├── behavior_analytics.py   # 行为分析
+│   ├── conflict_detector.py    # 冲突检测
+│   ├── dialogue_enhancer.py    # 对话增强
+│   ├── document_summarizer.py  # 文档摘要
+│   ├── enhanced_intent.py      # 意图增强
+│   ├── face_manager.py         # 人脸管理
+│   ├── learning.py             # 学习模块
+│   ├── pattern_learning.py     # 模式学习
+│   ├── proactive_chat.py       # 主动聊天
+│   ├── proactive_qa.py         # 主动问答
+│   ├── reminder_manager.py    # 提醒管理
+│   ├── semantic_search.py      # 语义搜索
+│   ├── task_executor.py        # 任务执行器
+│   ├── task_manager.py         # 任务管理
+│   └── tool_manager.py         # 工具管理
 │
 ├── xiaole-agent-context/        # Agent 规则（必须保留）
 │   ├── persona.md              # Agent 角色定义
@@ -93,6 +115,26 @@ xiaole-backend/
 - `memory.py` - 记忆管理
 - `conversation.py` - 对话管理
 - `scheduler.py` - 定时任务
+- `config.py` - 配置管理
+- `dependencies.py` - 依赖注入
+- `error_handler.py` - 错误处理
+
+### 功能模块（modules/）
+- `behavior_analytics.py` - 行为分析
+- `conflict_detector.py` - 冲突检测
+- `dialogue_enhancer.py` - 对话增强
+- `document_summarizer.py` - 文档摘要
+- `enhanced_intent.py` - 意图增强
+- `face_manager.py` - 人脸管理
+- `learning.py` - 学习模块
+- `pattern_learning.py` - 模式学习
+- `proactive_chat.py` - 主动聊天
+- `proactive_qa.py` - 主动问答
+- `reminder_manager.py` - 提醒管理
+- `semantic_search.py` - 语义搜索
+- `task_executor.py` - 任务执行器
+- `task_manager.py` - 任务管理
+- `tool_manager.py` - 工具管理
 
 ### Agent 规则（必须保留）
 - `xiaole-agent-context/*` - Agent 上下文文件

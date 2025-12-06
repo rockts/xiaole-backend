@@ -9,7 +9,7 @@ import glob
 import aiofiles
 from pathlib import Path
 from typing import Dict, Any, Optional
-from tool_manager import Tool, ToolParameter
+from modules.tool_manager import Tool, ToolParameter
 
 # 尝试导入文档处理库
 try:

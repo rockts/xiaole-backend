@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from db_setup import ProactiveQuestion, Message
 from datetime import datetime, timedelta
 from memory import MemoryManager
-from learning import get_learning_manager  # v0.7.0 学习层集成
+from modules.learning import get_learning_manager  # v0.7.0 学习层集成
 import os
 import re
 import json

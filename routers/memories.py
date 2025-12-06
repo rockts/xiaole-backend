@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, Optional, List
 from dependencies import get_xiaole_agent, get_conflict_detector
 from agent import XiaoLeAgent
-from conflict_detector import ConflictDetector
+from modules.conflict_detector import ConflictDetector
 from memory import MemoryManager
 from logger import logger
 

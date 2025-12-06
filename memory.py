@@ -3,7 +3,7 @@ from db_setup import Memory, SessionLocal
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from semantic_search import SemanticSearchManager
+from modules.semantic_search import SemanticSearchManager
 
 load_dotenv()
 
