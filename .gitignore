@@ -65,3 +65,11 @@ coverage.xml
 # Temporary files
 *.tmp
 *.bak
+.DS_Store
+
+# Development context (may contain sensitive info)
+# 使用 iCloud 同步，不提交到代码库
+docs/DEV_CONTEXT.md
+docs/conversation-context.md
+docs/*-local.md
+docs/*-private.md
