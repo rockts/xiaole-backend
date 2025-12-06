@@ -19,7 +19,15 @@ for file in "$ICLOUD_DIR"/*.md; do
   if [ -f "$file" ]; then
     filename=$(basename "$file")
     size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
-    modified=$(stat -f%Sm "$file" 2>/dev/null || stat -c%y "$file" 2>/dev/null | cut -d' ' -f1-2)
+    # 统一格式化：macOS 使用 -f%Sm 已格式化，Linux 需要 cut 处理
+    # 用括号包裹整个表达式，确保 cut 应用到两个分支
+    if modified_raw=$(stat -f%Sm "$file" 2>/dev/null); then
+      # macOS: 已格式化，直接使用
+      modified="$modified_raw"
+    else
+      # Linux: 需要格式化，提取日期和时间部分
+      modified=$(stat -c%y "$file" 2>/dev/null | cut -d' ' -f1-2)
+    fi
     
     # 检查是否是 iCloud 占位符（文件存在但可能未下载）
     # macOS 上，如果文件是 iCloud 占位符，stat 可能返回特殊值
