@@ -8,11 +8,15 @@
 
 - xiaole-backend/   后端逻辑
     └─ src/        后端代码、任务引擎
-    └─ xiaole-agent-context/ Agent 上下文
+    └─ xiaole-agent-context/ Agent 上下文（必须保留）
     └─ .cursorrules 后端 Agent 规则
-    └─ docs/       文档文件夹（可选）
+    └─ docs/       仅保留 DEV_CONTEXT.md（iCloud 同步）
+    └─ README.md   项目说明（必须保留）
 
-- xiaole-ai/       历史文档与归档
+- xiaole-ai/       项目文档库
+    └─ backend/    后端详细文档（使用指南、设置教程等）
+    └─ frontend/   前端文档
+    └─ shared/     共享文档
 
 ## 数据流和 API
 

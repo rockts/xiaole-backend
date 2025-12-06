@@ -8,3 +8,8 @@
 6. 所有工具调用必须遵守 tools.md 定义的接口
 7. 避免自动重构整个项目
 8. 每次提交或修改必须记录操作说明
+9. **文档管理规则**：
+   - Agent 相关文档（xiaole-agent-context/*）必须保留在当前仓库
+   - 详细文档（使用指南、教程等）应移到 xiaole-ai 仓库
+   - 项目说明（README.md）保留在当前仓库
+   - 开发上下文（docs/DEV_CONTEXT.md）保留在当前仓库（iCloud 同步）
