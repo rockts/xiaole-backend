@@ -14,3 +14,4 @@
    - 项目说明（README.md）保留在当前仓库
    - 开发上下文（docs/DEV_CONTEXT.md）保留在当前仓库（iCloud 同步）
    - **创建新文档时**：使用 `./scripts/create-doc.sh <类型> <名称>` 直接创建到文档库
+   - **前端仓库**：复制 `scripts/create-doc.sh` 到前端仓库，脚本会自动识别仓库类型
