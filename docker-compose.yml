@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: xiaole-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - QWEN_API_KEY=${QWEN_API_KEY}
+      - BAIDU_APP_ID=${BAIDU_APP_ID}
+      - BAIDU_API_KEY=${BAIDU_API_KEY}
+      - BAIDU_SECRET_KEY=${BAIDU_SECRET_KEY}
+    volumes:
+      - ./backend/uploads:/app/backend/uploads
+      - ./backend/static:/app/backend/static
+      - ./files:/app/files
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - xiaole-network
+
+  frontend:
+    image: nginx:alpine
+    container_name: xiaole-frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - xiaole-network
+
+networks:
+  xiaole-network:
+    driver: bridge

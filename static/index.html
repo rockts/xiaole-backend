@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>小乐 AI 管家 v0.8.0</title>
+    <!-- Phase 1: External unified stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/app.css">
+
+    <!-- Markdown 解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+</head>
+
+<body>
+    <!-- 图片查看器模态框 -->
+    <div id="imageViewerModal" class="image-viewer-modal">
+        <div class="image-viewer-content">
+            <button class="image-viewer-close" title="关闭 (ESC)">✕</button>
+            <img id="imageViewerImg" src="" alt="查看图片">
+        </div>
+    </div>
+
+    <div class="app-layout">
+        <!-- 移动端遮罩层 -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- 左侧边栏 -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-inner">
+                <div class="sidebar-header">
+                    <div class="sidebar-logo" style="display: flex; align-items: center; gap: 8px;">
+                        <svg class="sidebar-logo-icon" viewBox="0 0 48 48" aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px;">
+                            <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="2" fill="none" />
+                            <path d="M12 20C12 14.477 16.477 10 22 10H26C31.523 10 36 14.477 36 20V24"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                            <rect x="8" y="22" width="5" height="8" rx="2" fill="currentColor" />
+                            <rect x="35" y="22" width="5" height="8" rx="2" fill="currentColor" />
+                            <path
+                                d="M18 15C18 13 19.5 12 21 12C22 12 22.8 12.5 23 13.5C23.5 12.8 24.5 12 26 12C27.5 12 29 13 29 15C29 15.8 28.5 16.5 28 17C28.8 17.3 29.5 18 29.5 19C29.5 20.2 28.5 21 27 21H21C19.5 21 18.5 20.2 18.5 19C18.5 18 19.2 17.3 20 17C19.5 16.5 18 15.8 18 15Z"
+                                fill="currentColor" />
+                            <circle cx="19" cy="28" r="1.5" fill="currentColor" />
+                            <circle cx="29" cy="28" r="1.5" fill="currentColor" />
+                            <path d="M19 33C19 33 21 35 24 35C27 35 29 33 29 33" stroke="currentColor"
+                                stroke-width="1.5" stroke-linecap="round" />
+                        </svg>
+                        <span>小乐 AI</span>
+                    </div>
+                    <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="收起侧边栏">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="sidebar-section">
+                    <button class="new-chat-btn" data-action="new-chat">
+                        <span>新对话</span>
+                    </button>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="nav-item" data-tab="memory">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
+                                <path
+                                    d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
+                            </svg></span>
+                        <span>记忆</span>
+                    </div>
+                    <div class="nav-item" data-tab="reminders">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg></span>
+                        <span>提醒</span>
+                    </div>
+                    <div class="nav-item" data-tab="tasks">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 11 12 14 22 4" />
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                            </svg></span>
+                        <span>任务</span>
+                    </div>
+                    <div class="nav-item" data-tab="documents">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg></span>
+                        <span>文档</span>
+                    </div>
+                    <div class="nav-item" data-tab="schedule">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg></span>
+                        <span>课程表</span>
+                    </div>
+                    <div class="nav-item" data-tab="tools">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                            </svg></span>
+                        <span>工具</span>
+                    </div>
+                    <div class="nav-item" data-tab="settings">
+                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M12 1v6m0 6v6m0-12l-5.2-3m10.4 0L12 7m0 6l-5.2 3m10.4 0L12 13" />
+                            </svg></span>
+                        <span>设置</span>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <div class="section-header">历史对话</div>
+                <div class="sessions-scroll" id="sessionsList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <!-- 顶部栏 -->
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <button class="menu-toggle" title="菜单">
+                        ☰
+                    </button>
+                    <span class="page-title" id="pageTitle">小乐 AI 管家 v0.8.0</span>
+                </div>
+            </div>
+
+            <!-- 首页欢迎区 -->
+            <div class="home-hero" id="homeHero" style="display: none;">
+                <div class="home-panel">
+                    <div class="home-welcome" id="homeWelcomeText">晚上好，游戏小乐乐</div>
+                    <div class="home-input">
+                        <div class="home-shell">
+                            <button class="home-icon-btn" title="添加附件" data-trigger="upload">+</button>
+                            <div id="homeMessageInput" class="message-editor home-editor" contenteditable="true"
+                                data-placeholder="询问任何问题"></div>
+                            <div class="home-actions">
+                                <button class="home-icon-btn" id="homeVoiceBtn" title="语音输入"
+                                    data-action="voice">🎤</button>
+                                <button class="home-icon-btn primary" id="homeSendBtn" title="发送">
+                                    <span class="home-wave-icon">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 聊天界面 -->
+            <div id="chat" class="tab-content active chat-empty" style="position: relative;">
+                <div id="sessionInfo" class="session-info" style="display: none;">
+                    <div class="session-title-display">💬 <span id="currentSessionTitle"></span></div>
+                </div>
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-inner" id="chatInner"></div>
+                </div>
+                <!-- 图片上传输入（隐藏） -->
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                <div class="input-container" id="chatInputBar">
+                    <div class="input-wrapper">
+                        <button class="icon-btn" title="添加附件" data-trigger="upload" aria-label="添加附件"
+                            style="width: 36px; height: 36px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                        </button>
+                        <div id="messageInput" class="message-editor" contenteditable="true"
+                            data-placeholder="发送消息或输入 / 选择技能"></div>
+                        <div class="input-actions">
+                            <button class="icon-btn" id="voiceBtn" title="语音输入" data-action="voice" aria-label="语音输入"
+                                style="width: 36px; height: 36px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 1 0 6 0V4a3 3 0 0 0-3-3z" />
+                                    <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                                    <line x1="12" y1="19" x2="12" y2="23" />
+                                    <line x1="8" y1="23" x2="16" y2="23" />
+                                </svg>
+                            </button>
+                            <button class="icon-btn" id="sendBtn" title="发送" aria-label="发送"
+                                style="width: 36px; height: 36px; border: none; background: #667eea; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50%; flex-shrink: 0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <line x1="22" y1="2" x2="11" y2="13" />
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 全局停止语音按钮 -->
+                <div id="globalStopSpeakingBtn" class="global-stop-speaking" style="display: none;"
+                    data-action="stop-speaking" title="停止语音播放（或点击录音按钮打断）">
+                    <span>🔇</span>
+                    <span class="stop-text">停止播放</span>
+                </div>
+                <!-- 连续对话模式状态 -->
+                <div id="conversationModeStatus" class="conversation-mode-status" style="display: none;">
+                    <div class="conversation-indicator">
+                        <span class="conversation-dot"></span>
+                        <span id="conversationStateText">对话模式已开启</span>
+                        <button class="stop-speaking-btn" data-action="stop-speaking" title="停止语音">🔇</button>
+                    </div>
+                    <span id="conversationHint">说完话后会自动识别并发送</span>
+                </div>
+                <!-- 语音识别状态提示 -->
+                <div id="voiceStatus" class="voice-status" style="display: none;">
+                    <div class="voice-wave">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <span id="voiceText">正在聆听...</span>
+                </div>
+                <!-- 语音播放状态提示 -->
+                <div id="speakingStatus" class="speaking-status" style="display: none;">
+                    <div class="speaking-indicator">
+                        <span class="speaking-icon">🔊</span>
+                        <div class="speaking-wave">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <span id="speakingText">正在播放...</span>
+                </div>
+            </div>
+
+            <!-- 会话列表（已迁移到侧边栏，保留页面容器以兼容，但隐藏） -->
+            <div id="sessions" class="tab-content" style="display:none">
+                <div class="sessions-list" id="sessionsListPage">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+
+            <!-- 记忆查看 -->
+            <div id="memory" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>📊 记忆统计
+                            <span style="font-size: 12px; color: #667eea; font-weight: normal;">
+                                v0.2.0 - 🧠 支持语义搜索
+                            </span>
+                        </h3>
+                        <div class="stats-grid" id="statsGrid">
+                            <div class="loading">加载中...</div>
+                        </div>
+                    </div>
+
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="搜索记忆（支持语义理解）..."
+                            style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 10px;">
+                        <button data-action="search-memories">🔍 关键词</button>
+                        <button data-action="semantic-search" title="支持自然语言查询，如'多大年纪'">🧠 语义</button>
+                        <button data-action="load-memories">📋 全部</button>
+                    </div>
+
+                    <div id="memoryList"></div>
+                </div>
+            </div>
+
+            <!-- 行为分析 - 已隐藏，代码保留 -->
+            <div id="analytics" class="tab-content" style="display: none !important;">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>📊 用户行为分析 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.3.0
+                                Learning层</span></h3>
+                        <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center;">
+                            <button onclick="loadBehaviorAnalytics()"
+                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">🔄
+                                刷新数据</button>
+                            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                                <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh()"
+                                    style="cursor: pointer;">
+                                <span>自动刷新 (30秒)</span>
+                            </label>
+                            <span id="refreshStatus" style="font-size: 12px; color: #999;"></span>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #667eea;">⏰ 活跃时间分布</h4>
+                            <div id="activityPattern"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 100px;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #667eea;">💬 话题偏好</h4>
+                            <div id="topicPreferences"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 100px;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #667eea;">📈 对话统计</h4>
+                            <div id="behaviorStats"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 100px;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #ff6b6b;">⚠️ 记忆冲突检测</h4>
+                            <div id="conflictDetection"
+                                style="background: #fff5f5; padding: 15px; border-radius: 10px; min-height: 100px; border: 1px solid #ff6b6b;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #764ba2;">💡 主动问答历史</h4>
+                            <div id="proactiveQA"
+                                style="background: #f8f4ff; padding: 15px; border-radius: 10px; min-height: 100px; border: 1px solid #764ba2;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #10b981;">🧠 学习模式</h4>
+                            <div id="learningPatterns"
+                                style="background: #f0fdf4; padding: 15px; border-radius: 10px; min-height: 100px; border: 1px solid #10b981;">
+                                <div class="loading">点击"刷新数据"加载</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 任务管理 v0.8.0 -->
+            <div id="tasks" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>✅ 任务管理 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.8.0
+                                多轮任务规划</span>
+                        </h3>
+
+                        <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button data-action="tasks-refresh"
+                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                🔄 刷新
+                            </button>
+                            <button data-action="task-create"
+                                style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                ➕ 创建任务
+                            </button>
+                            <select id="taskStatusFilter"
+                                style="padding: 8px 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                                <option value="">全部状态</option>
+                                <option value="pending">待处理</option>
+                                <option value="in_progress">执行中</option>
+                                <option value="waiting">等待中</option>
+                                <option value="completed">已完成</option>
+                                <option value="failed">失败</option>
+                                <option value="cancelled">已取消</option>
+                            </select>
+                        </div>
+
+                        <!-- 统计信息 -->
+                        <div id="taskStats"
+                            style="margin: 15px 0; display: flex; gap: 15px; font-size: 13px; flex-wrap: wrap;">
+                            <span style="color: #f59e0b;">📋 待处理: <strong id="taskPendingCount">0</strong></span>
+                            <span style="color: #3b82f6;">⚡ 执行中: <strong id="taskInProgressCount">0</strong></span>
+                            <span style="color: #10b981;">✅ 已完成: <strong id="taskCompletedCount">0</strong></span>
+                            <span style="color: #ef4444;">❌ 失败: <strong id="taskFailedCount">0</strong></span>
+                        </div>
+
+                        <!-- 任务列表 -->
+                        <div style="margin: 20px 0;">
+                            <div id="tasksList"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 200px;">
+                                <div class="loading">正在加载任务...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 提醒管理 v0.5.0 -->
+            <div id="reminders" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>🔔 提醒管理 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.5.0
+                                Active Perception层</span></h3>
+
+                        <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button data-action="reminders-refresh"
+                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                🔄 刷新
+                            </button>
+                            <button data-action="reminder-create"
+                                style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                ➕ 创建提醒
+                            </button>
+                            <button data-action="reminder-toggle-expired"
+                                style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                <span id="toggleExpiredBtn">👁️ 显示已过期</span>
+                            </button>
+                            <button data-action="reminder-check"
+                                style="padding: 10px 20px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                🔍 立即检查
+                            </button>
+                        </div>
+
+                        <!-- 统计信息 -->
+                        <div id="reminderStats" style="margin: 15px 0; display: flex; gap: 15px; font-size: 13px;">
+                            <span style="color: #10b981;">✅ 活跃: <strong id="activeCount">0</strong></span>
+                            <span style="color: #999;">⏸️ 已禁用: <strong id="disabledCount">0</strong></span>
+                            <span style="color: #f59e0b;">📜 已触发: <strong id="triggeredCount">0</strong></span>
+                        </div>
+
+                        <!-- 提醒列表（合并版） -->
+                        <div style="margin: 20px 0;">
+                            <div id="remindersList"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 200px;">
+                                <div class="loading">点击"刷新"加载提醒</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文档总结 v0.8.0 Phase 3 -->
+            <div id="documents" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>📄 文档总结 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.8.0 Phase
+                                3</span></h3>
+
+                        <!-- 上传区域 -->
+                        <div style="margin: 20px 0;">
+                            <div
+                                style="border: 2px dashed #667eea; border-radius: 12px; padding: 40px; text-align: center; background: #f8f9fa;">
+                                <div style="font-size: 48px; margin-bottom: 15px;">📤</div>
+                                <h4 style="margin: 10px 0; color: #333;">上传文档进行智能总结</h4>
+                                <p style="color: #666; margin: 10px 0; font-size: 14px;">
+                                    支持 PDF、Word (DOCX)、文本文件 (TXT、MD)<br>
+                                    最大文件大小: 10 MB
+                                </p>
+                                <input type="file" id="documentFileInput" accept=".pdf,.docx,.txt,.md"
+                                    style="display: none;">
+                                <button data-action="document-file-select"
+                                    style="margin-top: 15px; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                       color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                                    📁 选择文件
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 文档列表 -->
+                        <div style="margin: 20px 0;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h4 style="margin: 0;">📚 文档列表</h4>
+                                <button data-action="documents-refresh"
+                                    style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    🔄 刷新
+                                </button>
+                            </div>
+                            <div id="documentsList"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 200px;">
+                                <div class="loading">点击"刷新"加载文档列表</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 课程表管理 v0.7.0 -->
+            <div id="schedule" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>📅 课程表管理 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.7.0</span>
+                        </h3>
+
+                        <div style="margin: 15px 0; display: flex; gap: 10px;">
+                            <button data-action="schedule-refresh"
+                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                🔄 刷新课程表
+                            </button>
+                            <button data-action="schedule-save"
+                                style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                💾 保存修改
+                            </button>
+                        </div>
+
+                        <!-- 课程表格 -->
+                        <div id="scheduleTable" style="overflow-x: auto; margin-top: 20px;">
+                            <table
+                                style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
+                                <thead style="background: #667eea; color: white;">
+                                    <tr>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">时段</th>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">周一</th>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">周二</th>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">周三</th>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">周四</th>
+                                        <th style="padding: 12px; border: 1px solid #ddd;">周五</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scheduleBody">
+                                    <!-- 将由JavaScript动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工具管理 -->
+            <div id="tools" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>🔧 工具管理 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.4.0
+                                Action层</span></h3>
+
+                        <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center;">
+                            <button data-action="tools-refresh"
+                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                🔄 刷新工具列表
+                            </button>
+                        </div>
+
+                        <!-- 工具列表 -->
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #667eea;">📋 可用工具</h4>
+                            <div id="toolsList"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 150px;">
+                                <div class="loading">点击"刷新工具列表"加载</div>
+                            </div>
+                        </div>
+
+                        <!-- 工具执行历史 -->
+                        <div style="margin: 20px 0;">
+                            <h4 style="margin-bottom: 10px; color: #667eea;">📊 工具执行历史</h4>
+                            <div style="margin-bottom: 10px;">
+                                <button data-action="tools-history-refresh"
+                                    style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                    🔄 刷新历史
+                                </button>
+                                <select id="historyLimit"
+                                    style="margin-left: 10px; padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
+                                    <option value="10">最近10条</option>
+                                    <option value="20" selected>最近20条</option>
+                                    <option value="50">最近50条</option>
+                                </select>
+                            </div>
+                            <div id="toolHistory"
+                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 200px; max-height: 400px; overflow-y: auto;">
+                                <div class="loading">点击"刷新历史"加载</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置面板 v0.6.0 Phase 2 -->
+            <div id="settings" class="tab-content">
+                <div class="memory-container">
+                    <div class="card stats-card">
+                        <h3>⚙️ 用户设置 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.6.0
+                                用户体验</span>
+                        </h3>
+
+                        <!-- 外观设置 -->
+                        <div class="settings-section">
+                            <h4 class="settings-title">🎨 外观设置</h4>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">主题模式</span>
+                                    <span class="setting-desc">选择界面主题偏好</span>
+                                </div>
+                                <select id="themePreference" class="setting-select"
+                                    data-setting-change="updateThemePreference">
+                                    <option value="system">跟随系统</option>
+                                    <option value="light">始终亮色</option>
+                                    <option value="dark">始终暗色</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 交互设置 -->
+                        <div class="settings-section">
+                            <h4 class="settings-title">⌨️ 交互设置</h4>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">快捷键</span>
+                                    <span class="setting-desc">启用/禁用键盘快捷键功能</span>
+                                </div>
+                                <label class="setting-switch">
+                                    <input type="checkbox" id="keyboardShortcuts" checked
+                                        data-setting-change="toggleKeyboardShortcuts">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">快捷键提示栏</span>
+                                    <span class="setting-desc">显示/隐藏底部快捷键提示</span>
+                                </div>
+                                <label class="setting-switch">
+                                    <input type="checkbox" id="shortcutHintsEnabled" checked
+                                        data-setting-change="toggleShortcutHints">
+                                    <span class="switch-slider"></span>
+                                </label>·
+                            </div>
+                        </div>
+
+                        <!-- AI响应设置 -->
+                        <div class="settings-section">
+                            <h4 class="settings-title">🤖 AI响应设置</h4>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">回复风格</span>
+                                    <span class="setting-desc">选择AI的回复详细程度</span>
+                                </div>
+                                <select id="responseStyle" class="setting-select"
+                                    data-setting-change="updateResponseStyle">
+                                    <option value="concise">简洁模式</option>
+                                    <option value="balanced" selected>平衡模式</option>
+                                    <option value="detailed">详细模式</option>
+                                    <option value="professional">专业模式</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 通知设置 -->
+                        <div class="settings-section">
+                            <h4 class="settings-title">🔔 通知设置</h4>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">主动问答提示</span>
+                                    <span class="setting-desc">显示追问建议提示</span>
+                                </div>
+                                <label class="setting-switch">
+                                    <input type="checkbox" id="proactiveQA" checked
+                                        data-setting-change="toggleProactiveQA">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">提醒通知</span>
+                                    <span class="setting-desc">启用提醒弹窗通知</span>
+                                </div>
+                                <label class="setting-switch">
+                                    <input type="checkbox" id="reminderNotifications" checked
+                                        data-setting-change="toggleReminderNotifications">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- v0.8.0 语音设置 -->
+                        <div class="settings-section">
+                            <h4 class="settings-title">🎤 语音交互设置 <span
+                                    style="font-size: 11px; color: #f5576c; font-weight: normal;">新功能</span></h4>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">语音识别服务</span>
+                                    <span class="setting-desc">选择语音识别提供商</span>
+                                </div>
+                                <select id="voiceProvider" class="setting-select"
+                                    onchange="updateVoiceProvider(this.value)">
+                                    <option value="google">Google (需科学上网)</option>
+                                    <option value="baidu">百度语音 (推荐)</option>
+                                </select>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">自动播放AI回复</span>
+                                    <span class="setting-desc">AI回复后自动播放语音</span>
+                                </div>
+                                <label class="setting-switch">
+                                    <input type="checkbox" id="voiceAutoPlay"
+                                        onchange="updateVoiceAutoPlay(this.checked)">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">语音合成服务</span>
+                                    <span class="setting-desc">选择AI回复的语音合成方式</span>
+                                </div>
+                                <select id="ttsProvider" class="setting-select"
+                                    onchange="updateTTSProvider(this.value)">
+                                    <option value="web">浏览器语音 (免费)</option>
+                                    <option value="baidu">百度语音 (更自然)</option>
+                                </select>
+                            </div>
+
+                            <div class="setting-item" id="baiduTTSPersonSetting" style="display: none;">
+                                <div class="setting-label">
+                                    <span class="setting-name">百度TTS音色</span>
+                                    <span class="setting-desc">选择AI回复的声音（基础免费版）</span>
+                                </div>
+                                <select id="ttsPerson" class="setting-select" onchange="updateTTSPerson(this.value)">
+                                    <option value="0">度小美（女声，温柔）</option>
+                                    <option value="1">度小宇（男声，温和）</option>
+                                    <option value="3">度逍遥（男声，年轻活力）</option>
+                                    <option value="4">度丫丫（女声，活泼可爱）</option>
+                                </select>
+                                <div
+                                    style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 6px; font-size: 12px; color: #856404;">
+                                    💡 提示：仅显示基础免费版音色。高级音色（度小娇、度小鹿等）需要付费版本。
+                                </div>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">语速</span>
+                                    <span class="setting-desc">调节语音播放速度</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="range" id="voiceRate" min="0.5" max="2" step="0.1" value="1.0"
+                                        oninput="updateVoiceRate(this.value)"
+                                        style="flex: 1; height: 4px; border-radius: 2px; outline: none; cursor: pointer;">
+                                    <span id="voiceRateValue"
+                                        style="min-width: 40px; text-align: right; font-weight: 500;">1.0x</span>
+                                </div>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-label">
+                                    <span class="setting-name">音量</span>
+                                    <span class="setting-desc">调节语音播放音量</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="range" id="voiceVolume" min="0" max="1" step="0.1" value="1.0"
+                                        oninput="updateVoiceVolume(this.value)"
+                                        style="flex: 1; height: 4px; border-radius: 2px; outline: none; cursor: pointer;">
+                                    <span id="voiceVolumeValue"
+                                        style="min-width: 40px; text-align: right; font-weight: 500;">100%</span>
+                                </div>
+                            </div>
+
+                            <div class="setting-item" style="background: #f8f9fa; border-radius: 8px; padding: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <span style="font-size: 20px;">💡</span>
+                                    <span style="font-weight: 500; color: #333;">语音功能使用提示</span>
+                                </div>
+                                <ul
+                                    style="margin: 0; padding-left: 20px; font-size: 12px; color: #666; line-height: 1.8;">
+                                    <li>点击输入框旁的 🎤 按钮开始语音输入</li>
+                                    <li>支持中文语音识别，识别后自动填入输入框</li>
+                                    <li>开启自动播放后，AI回复会自动朗读</li>
+                                    <li>建议使用 Chrome、Edge 或 Safari 浏览器</li>
+                                    <li>首次使用需授予麦克风权限</li>
+                                    <li><strong style="color: #f5576c;">⚠️ 语音识别需要网络连接</strong></li>
+                                </ul>
+                            </div>
+
+                            <div class="setting-item"
+                                style="background: #fff3cd; border-radius: 8px; padding: 12px; border-left: 4px solid #f5576c;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <span style="font-size: 20px;">⚠️</span>
+                                    <span style="font-weight: 500; color: #856404;">遇到"network"错误？</span>
+                                </div>
+                                <ul
+                                    style="margin: 0; padding-left: 20px; font-size: 12px; color: #856404; line-height: 1.8;">
+                                    <li>语音识别使用Google的Web Speech API，需要网络连接</li>
+                                    <li>请确保网络连接正常，可以访问Google服务</li>
+                                    <li>如果在国内使用，可能需要科学上网</li>
+                                    <li>备选方案：可以手动输入文字，或等待后续版本集成国内语音API</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- 重置按钮 -->
+                        <div
+                            style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center;">
+                            <button onclick="resetSettings()" style="
+                            padding: 12px 30px;
+                            background: #ff6b6b;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                        ">
+                                🔄 重置所有设置
+                            </button>
+                            <p style="margin-top: 10px; font-size: 12px; color: #999;">
+                                将恢复所有设置为默认值
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div> <!-- 关闭 main-content -->
+    </div> <!-- 关闭 app-layout -->
+
+    <!-- v0.6.0 性能优化模块 -->
+    <script>
+        // 自动生成时间戳用于破坏缓存
+        (function () {
+            const t = Date.now();
+            const scripts = [
+                `/static/performance.js?t=${t}`,
+                `/static/js/legacy-inline.js?t=${t}`
+            ];
+            const moduleScripts = [
+                `/static/js/app.js?t=${t}`
+            ];
+
+            scripts.forEach(src => {
+                const script = document.createElement('script');
+                script.src = src;
+                document.head.appendChild(script);
+            });
+
+            moduleScripts.forEach(src => {
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = src;
+                document.head.appendChild(script);
+            });
+        })();
+    </script>
+</body>
+
+</html>

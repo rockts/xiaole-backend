@@ -1,0 +1,17 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer circle -->
+  <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="2" fill="none"/>
+  
+  <!-- Headphones -->
+  <path d="M12 20C12 14.477 16.477 10 22 10H26C31.523 10 36 14.477 36 20V24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <rect x="8" y="22" width="5" height="8" rx="2" fill="currentColor"/>
+  <rect x="35" y="22" width="5" height="8" rx="2" fill="currentColor"/>
+  
+  <!-- Brain -->
+  <path d="M18 15C18 13 19.5 12 21 12C22 12 22.8 12.5 23 13.5C23.5 12.8 24.5 12 26 12C27.5 12 29 13 29 15C29 15.8 28.5 16.5 28 17C28.8 17.3 29.5 18 29.5 19C29.5 20.2 28.5 21 27 21H21C19.5 21 18.5 20.2 18.5 19C18.5 18 19.2 17.3 20 17C19.5 16.5 18 15.8 18 15Z" fill="currentColor"/>
+  
+  <!-- Face -->
+  <circle cx="19" cy="28" r="1.5" fill="currentColor"/>
+  <circle cx="29" cy="28" r="1.5" fill="currentColor"/>
+  <path d="M19 33C19 33 21 35 24 35C27 35 29 33 29 33" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

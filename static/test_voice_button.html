@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音按钮测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        .voice-btn {
+            font-size: 24px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #4CAF50;
+            color: white;
+            border: none;
+        }
+
+        .voice-btn.recording {
+            background: #f44336;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .log {
+            margin-top: 10px;
+            padding: 10px;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎤 语音按钮诊断工具</h1>
+
+    <div class="test-section">
+        <h2>测试 1: 简单点击测试</h2>
+        <button onclick="testClick()">点击我</button>
+        <p id="clickResult">未点击</p>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 2: 麦克风权限</h2>
+        <button onclick="testMicrophone()">测试麦克风权限</button>
+        <p id="micResult">未测试</p>
+        <div id="micList" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 3: 百度语音服务</h2>
+        <button onclick="testBaiduService()">检查服务状态</button>
+        <p id="serviceResult">未测试</p>
+    </div>
+
+    <div class="test-section">
+        <h2>测试 4: 完整录音流程</h2>
+        <button class="voice-btn" id="testVoiceBtn" onclick="testFullRecording()">🎤</button>
+        <div id="status">状态: 就绪</div>
+        <canvas id="waveform" width="700" height="100" style="background:#000;margin-top:10px;"></canvas>
+        <p id="volumeInfo" style="margin-top:10px;color:#666;">音量: -</p>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function testClick() {
+            document.getElementById('clickResult').textContent = '✅ 点击成功！按钮工作正常';
+            log('✅ 简单点击测试通过');
+        }
+
+        async function testMicrophone() {
+            log('🔍 测试麦克风权限...');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                document.getElementById('micResult').textContent = '✅ 麦克风权限已获取';
+                log('✅ 麦克风权限获取成功');
+
+                // 列出所有音频输入设备
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+                let html = '<p><strong>可用麦克风:</strong></p><ul style="text-align:left;">';
+                audioInputs.forEach((device, i) => {
+                    html += `<li>${i + 1}. ${device.label || '麦克风 ' + (i + 1)} (ID: ${device.deviceId.substring(0, 20)}...)</li>`;
+                    log(`  麦克风 ${i + 1}: ${device.label || '未命名'}`);
+                });
+                html += '</ul><p style="color:#666;font-size:12px;">提示: 如果识别不准，可能是浏览器选择了错误的麦克风</p>';
+                document.getElementById('micList').innerHTML = html;
+
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                document.getElementById('micResult').textContent = `❌ 错误: ${error.name} - ${error.message}`;
+                log(`❌ 麦克风权限失败: ${error.name}`);
+            }
+        }
+
+        async function testBaiduService() {
+            log('🔍 检查百度语音服务...');
+            try {
+                const response = await fetch('/api/voice/status?detailed=true');
+                const result = await response.json();
+                document.getElementById('serviceResult').textContent =
+                    `服务状态: ${result.enabled ? '✅ 已启用' : '❌ 未启用'}\n配置: ${JSON.stringify(result, null, 2)}`;
+                log(`✅ 服务状态: ${JSON.stringify(result)}`);
+            } catch (error) {
+                document.getElementById('serviceResult').textContent = `❌ 错误: ${error.message}`;
+                log(`❌ 服务检查失败: ${error.message}`);
+            }
+        }
+
+        let isRecording = false;
+        let recorder = null;
+        let animationId = null;
+        let volumeCheckInterval = null;
+
+        function monitorVolume(stream, analyser) {
+            const canvas = document.getElementById('waveform');
+            const ctx = canvas.getContext('2d');
+            const bufferLength = analyser.fftSize;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function updateVolume() {
+                if (!isRecording) {
+                    cancelAnimationFrame(animationId);
+                    if (volumeCheckInterval) {
+                        clearInterval(volumeCheckInterval);
+                        volumeCheckInterval = null;
+                    }
+                    return;
+                }
+
+                animationId = requestAnimationFrame(updateVolume);
+
+                // 获取时域数据
+                analyser.getByteTimeDomainData(dataArray);
+
+                // 绘制波形
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#0f0';
+                ctx.beginPath();
+
+                const sliceWidth = canvas.width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = v * canvas.height / 2;
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                    x += sliceWidth;
+                }
+
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+
+                // 计算音量 (使用 Byte 数据)
+                let sum = 0;
+                let max = 0;
+                let min = 255;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const value = dataArray[i];
+                    if (value > max) max = value;
+                    if (value < min) min = value;
+                    const diff = Math.abs(value - 128);
+                    sum += diff * diff;
+                }
+
+                // 峰值差异
+                const peakDiff = max - min;
+                const peakPercent = Math.round((peakDiff / 255) * 100);
+
+                // RMS
+                const rms = Math.sqrt(sum / bufferLength) / 128;
+                const rmsPercent = Math.round(rms * 100);
+
+                let statusText = '';
+                if (peakPercent < 5) {
+                    statusText = '⚠️ 几乎没声音！';
+                } else if (peakPercent < 15) {
+                    statusText = '⚠️ 太小了！';
+                } else if (peakPercent < 30) {
+                    statusText = '⚠️ 有点小';
+                } else if (peakPercent < 70) {
+                    statusText = '✅ 音量正常';
+                } else {
+                    statusText = '✅ 音量很好！';
+                }
+
+                document.getElementById('volumeInfo').textContent =
+                    `峰值: ${peakPercent}% | RMS: ${rmsPercent}% ${statusText} [Raw: ${min}-${max}]`;
+            }
+
+            updateVolume();
+        }
+
+        function drawWaveform(analyser) {
+            // 这个函数现在由 monitorVolume 替代
+        }
+
+        async function testFullRecording() {
+            const btn = document.getElementById('testVoiceBtn');
+            const status = document.getElementById('status');
+
+            if (isRecording) {
+                log('⏹️ 停止录音...');
+                isRecording = false;
+                btn.classList.remove('recording');
+                status.textContent = '状态: 处理中...';
+
+                // 清空波形
+                const canvas = document.getElementById('waveform');
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('volumeInfo').textContent = '音量: -';
+
+                if (recorder) {
+                    // 停止录音流
+                    recorder.stream.getTracks().forEach(track => track.stop());
+                    recorder.processor.disconnect();
+                    recorder.source.disconnect();
+
+                    // 合并音频数据并增益
+                    const raw = mergeBuffers(recorder.bufferL);
+                    const boosted = normalizeAndBoost(raw); // 增益处理
+                    const downsampled = downsampleBuffer(boosted, recorder.audioContext.sampleRate, 16000);
+                    const wavBlob = encodeWAV(downsampled, 16000);
+
+                    log(`📦 音频数据: ${wavBlob.size} 字节`);
+
+                    // 上传识别
+                    const formData = new FormData();
+                    formData.append('file', wavBlob, 'test.wav');
+
+                    try {
+                        const response = await fetch('/api/voice/recognize', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+
+                        if (result.success) {
+                            status.textContent = `✅ 识别成功: ${result.text}`;
+                            log(`✅ 识别结果: ${result.text}`);
+                        } else {
+                            status.textContent = `❌ 识别失败: ${result.error}`;
+                            log(`❌ 识别失败: ${result.error}`);
+                        }
+                    } catch (error) {
+                        status.textContent = `❌ 上传失败: ${error.message}`;
+                        log(`❌ 上传失败: ${error.message}`);
+                    }
+                }
+
+                status.textContent = '状态: 就绪';
+                return;
+            }
+
+            // 开始录音
+            try {
+                log('🎤 开始录音...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                isRecording = true;
+                btn.classList.add('recording');
+                status.textContent = '状态: 录音中...（点击停止）';
+
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                analyser.smoothingTimeConstant = 0.8;
+
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                const bufferL = [];
+
+                processor.onaudioprocess = function (e) {
+                    if (!isRecording) return;
+                    const channel = e.inputBuffer.getChannelData(0);
+                    bufferL.push(new Float32Array(channel));
+                };
+
+                // 连接音频节点
+                source.connect(analyser);
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                recorder = { audioContext, source, processor, stream, bufferL, analyser };
+                log('✅ 录音已启动');
+                log(`  采样率: ${audioContext.sampleRate} Hz`);
+                log(`  FFT大小: ${analyser.fftSize}`);
+
+                // 开始监控音量
+                monitorVolume(stream, analyser);
+
+            } catch (error) {
+                status.textContent = `❌ 错误: ${error.message}`;
+                log(`❌ 启动录音失败: ${error.name} - ${error.message}`);
+            }
+        }
+
+        // 辅助函数
+        function mergeBuffers(bufferArray) {
+            let length = 0;
+            bufferArray.forEach(b => length += b.length);
+            const result = new Float32Array(length);
+            let offset = 0;
+            bufferArray.forEach(b => { result.set(b, offset); offset += b.length; });
+            return result;
+        }
+
+        // 音频归一化和增益
+        function normalizeAndBoost(buffer, targetPeak = 0.95, minGain = 2.0) {
+            // 找到最大振幅
+            let max = 0;
+            for (let i = 0; i < buffer.length; i++) {
+                const abs = Math.abs(buffer[i]);
+                if (abs > max) max = abs;
+            }
+
+            // 计算增益
+            let gain = 1.0;
+            if (max > 0) {
+                gain = Math.max(targetPeak / max, minGain);
+            } else {
+                gain = minGain;
+            }
+
+            // 限制最大增益
+            gain = Math.min(gain, 10.0);
+
+            log(`🔊 音频增益: ${gain.toFixed(2)}x (原始峰值: ${(max * 100).toFixed(1)}%)`);
+
+            // 应用增益
+            const result = new Float32Array(buffer.length);
+            for (let i = 0; i < buffer.length; i++) {
+                result[i] = Math.max(-1, Math.min(1, buffer[i] * gain));
+            }
+
+            return result;
+        }
+
+        function downsampleBuffer(buffer, inSampleRate, outSampleRate) {
+            if (outSampleRate === inSampleRate) return buffer;
+            const ratio = inSampleRate / outSampleRate;
+            const newLength = Math.round(buffer.length / ratio);
+            const result = new Float32Array(newLength);
+            let offsetResult = 0;
+            let offsetBuffer = 0;
+            while (offsetResult < result.length) {
+                const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+                let accum = 0, count = 0;
+                for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                    accum += buffer[i];
+                    count++;
+                }
+                result[offsetResult] = accum / count;
+                offsetResult++;
+                offsetBuffer = nextOffsetBuffer;
+            }
+            return result;
+        }
+
+        function encodeWAV(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        log('🚀 诊断工具已加载');
+    </script>
+</body>
+
+</html>

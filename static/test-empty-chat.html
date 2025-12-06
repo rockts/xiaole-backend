@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>空对话测试</title>
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        /* 强制应用空对话样式 */
+        #chat.chat-empty .input-container {
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border-top: none !important;
+            z-index: 5 !important;
+        }
+
+        #chat.chat-empty .input-wrapper {
+            width: min(768px, 90vw) !important;
+            box-shadow: 0 0 0 1px #ddd, 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+            border-radius: 28px !important;
+            padding: 10px 10px 10px 20px !important;
+            border: none !important;
+        }
+
+        .chat-welcome {
+            position: absolute !important;
+            top: calc(50% - 150px) !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            text-align: center !important;
+        }
+
+        .chat-welcome .welcome-title {
+            font-size: 32px !important;
+            font-weight: 600 !important;
+            margin-bottom: 12px !important;
+        }
+
+        .chat-welcome .welcome-subtitle {
+            font-size: 14px !important;
+            color: #999 !important;
+        }
+    </style>
+</head>
+
+<body style="margin: 0; padding: 0; height: 100vh; overflow: hidden; background: #fff;">
+    <div id="chat" class="chat-empty" style="position: relative; height: 100vh; width: 100%;">
+        <div class="chat-welcome">
+            <div class="welcome-title">晚上好</div>
+            <div class="welcome-subtitle">准备好开始了吗？</div>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper"
+                style="display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #ddd;">
+                <button style="border: none; background: none; padding: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                </button>
+                <div contenteditable="true" style="flex: 1; padding: 8px 0; outline: none; color: #999;">我们先从哪里开始呢？
+                </div>
+                <button
+                    style="border: none; background: #667eea; color: white; padding: 8px; border-radius: 50%; width: 36px; height: 36px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

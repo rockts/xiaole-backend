@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>简单麦克风测试</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        .recording {
+            background: red;
+            color: white;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            margin: 20px 0;
+            background: #000;
+        }
+
+        #info {
+            background: #f0f0f0;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎤 麦克风诊断工具</h1>
+
+    <button id="testBtn" onclick="toggleTest()">开始测试</button>
+
+    <canvas id="canvas" width="700" height="150"></canvas>
+
+    <div id="info">
+        <h3>状态信息</h3>
+        <div id="status">未开始</div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        let isRecording = false;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationId = null;
+
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${msg}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        }
+
+        async function toggleTest() {
+            const btn = document.getElementById('testBtn');
+
+            if (isRecording) {
+                // 停止
+                log('⏹️ 停止测试');
+                isRecording = false;
+                btn.classList.remove('recording');
+                btn.textContent = '开始测试';
+
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                }
+                if (microphone && microphone.mediaStream) {
+                    microphone.mediaStream.getTracks().forEach(track => track.stop());
+                }
+                if (audioContext) {
+                    audioContext.close();
+                }
+
+                document.getElementById('status').textContent = '已停止';
+                return;
+            }
+
+            // 开始
+            try {
+                log('🎤 请求麦克风权限...');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+
+                log('✅ 麦克风权限获取成功');
+
+                // 获取音频轨道信息
+                const audioTrack = stream.getAudioTracks()[0];
+                const settings = audioTrack.getSettings();
+                log(`麦克风: ${audioTrack.label}`);
+                log(`采样率: ${settings.sampleRate || '未知'} Hz`);
+                log(`声道数: ${settings.channelCount || '未知'}`);
+
+                // 创建音频上下文
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                log(`AudioContext 状态: ${audioContext.state}`);
+                log(`AudioContext 采样率: ${audioContext.sampleRate} Hz`);
+
+                // 恢复 AudioContext（某些浏览器需要）
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                    log(`AudioContext 已恢复: ${audioContext.state}`);
+                }
+
+                // 创建节点
+                microphone = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                analyser.smoothingTimeConstant = 0.3;
+
+                // 连接：microphone -> analyser
+                microphone.connect(analyser);
+
+                log('✅ 音频节点已连接');
+                log(`Analyser FFT大小: ${analyser.fftSize}`);
+                log(`Analyser 频率 bin 数: ${analyser.frequencyBinCount}`);
+
+                isRecording = true;
+                btn.classList.add('recording');
+                btn.textContent = '停止测试';
+
+                microphone.mediaStream = stream;
+
+                // 开始可视化
+                visualize();
+
+            } catch (error) {
+                log(`❌ 错误: ${error.name} - ${error.message}`);
+                document.getElementById('status').textContent = `错误: ${error.message}`;
+            }
+        }
+
+        function visualize() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            let frameCount = 0;
+
+            function draw() {
+                if (!isRecording) return;
+
+                animationId = requestAnimationFrame(draw);
+                frameCount++;
+
+                // 获取数据
+                analyser.getByteTimeDomainData(dataArray);
+
+                // 绘制波形
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#0f0';
+                ctx.beginPath();
+
+                const sliceWidth = canvas.width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = v * canvas.height / 2;
+
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+
+                    x += sliceWidth;
+                }
+
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+
+                // 计算统计信息
+                let min = 255, max = 0, sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const val = dataArray[i];
+                    if (val < min) min = val;
+                    if (val > max) max = val;
+                    sum += Math.abs(val - 128);
+                }
+
+                const range = max - min;
+                const avg = sum / bufferLength;
+                const peakPercent = Math.round((range / 255) * 100);
+                const avgPercent = Math.round((avg / 128) * 100);
+
+                // 每30帧记录一次
+                if (frameCount % 30 === 0) {
+                    log(`📊 Min: ${min}, Max: ${max}, 范围: ${range}, 峰值: ${peakPercent}%, 平均: ${avgPercent}%`);
+                }
+
+                // 更新状态
+                let statusColor = '#ff0000';
+                let statusText = '⚠️ 没有检测到声音';
+
+                if (range > 200) {
+                    statusColor = '#00ff00';
+                    statusText = '✅ 音量很好！';
+                } else if (range > 100) {
+                    statusColor = '#00aa00';
+                    statusText = '✅ 音量正常';
+                } else if (range > 30) {
+                    statusColor = '#ffaa00';
+                    statusText = '⚠️ 音量偏小';
+                } else if (range > 5) {
+                    statusColor = '#ff6600';
+                    statusText = '⚠️ 音量太小';
+                }
+
+                document.getElementById('status').innerHTML = `
+                    <strong style="color:${statusColor}">${statusText}</strong><br>
+                    原始范围: ${min} - ${max} (差值: ${range})<br>
+                    峰值百分比: ${peakPercent}%<br>
+                    平均偏移: ${avgPercent}%<br>
+                    帧数: ${frameCount}
+                `;
+            }
+
+            draw();
+        }
+
+        log('🚀 页面已加载，点击"开始测试"按钮');
+    </script>
+</body>
+
+</html>
