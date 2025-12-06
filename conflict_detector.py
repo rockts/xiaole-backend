@@ -119,7 +119,7 @@ class ConflictDetector:
             list: 冲突列表 [{type, old_value, new_value, old_memory,
                             new_memory, conflict_time}]
         """
-        from backend.db_setup import Memory
+        from db_setup import Memory
 
         # 每次创建新session
         session = SessionLocal()

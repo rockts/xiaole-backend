@@ -3,11 +3,11 @@ from typing import Dict, Any, Optional
 import os
 import time
 import json
-from backend.dependencies import get_xiaole_agent
-from backend.agent import XiaoLeAgent
-from backend.document_summarizer import DocumentSummarizer
-from backend.config import UPLOADS_DIR, DB_CONFIG
-from backend.auth import get_current_user
+from dependencies import get_xiaole_agent
+from agent import XiaoLeAgent
+from document_summarizer import DocumentSummarizer
+from config import UPLOADS_DIR, DB_CONFIG
+from auth import get_current_user
 
 router = APIRouter(
     prefix="/documents",

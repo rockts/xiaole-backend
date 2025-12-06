@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from backend.reminder_manager import get_reminder_manager, ReminderManager
-from backend.dependencies import get_scheduler
-from backend.scheduler import ReminderScheduler
-from backend.logger import logger
-from backend.auth import get_current_user
+from reminder_manager import get_reminder_manager, ReminderManager
+from dependencies import get_scheduler
+from scheduler import ReminderScheduler
+from logger import logger
+from auth import get_current_user
 
 router = APIRouter(
     prefix="/reminders",

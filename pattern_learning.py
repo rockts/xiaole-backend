@@ -99,7 +99,7 @@ class PatternLearner:
             user_id: 用户ID
             words: 词汇列表
         """
-        from backend.db_setup import LearnedPattern
+        from db_setup import LearnedPattern
 
         for word in words:
             # 查找是否已存在
@@ -144,7 +144,7 @@ class PatternLearner:
             user_id: 用户ID
             question: 问题文本
         """
-        from backend.db_setup import LearnedPattern
+        from db_setup import LearnedPattern
 
         # 简单的问题分类（基于关键词）
         category = self._categorize_question(question)
@@ -227,7 +227,7 @@ class PatternLearner:
         Returns:
             高频词列表
         """
-        from backend.db_setup import LearnedPattern
+        from db_setup import LearnedPattern
 
         session = SessionLocal()
         try:
@@ -264,7 +264,7 @@ class PatternLearner:
         Returns:
             常见问题列表
         """
-        from backend.db_setup import LearnedPattern
+        from db_setup import LearnedPattern
 
         session = SessionLocal()
         try:
@@ -300,7 +300,7 @@ class PatternLearner:
         Returns:
             学习洞察数据
         """
-        from backend.db_setup import LearnedPattern
+        from db_setup import LearnedPattern
 
         session = SessionLocal()
         try:

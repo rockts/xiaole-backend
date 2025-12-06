@@ -4,9 +4,9 @@ import base64
 import requests
 import json
 from typing import Dict, Any, List, Optional
-from backend.tool_manager import Tool, ToolParameter
-from backend.face_manager import FaceManager
-from backend.config import UPLOADS_DIR
+from tool_manager import Tool, ToolParameter
+from face_manager import FaceManager
+from config import UPLOADS_DIR
 
 logger = logging.getLogger(__name__)
 

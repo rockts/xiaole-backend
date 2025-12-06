@@ -4,7 +4,7 @@
 """
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from backend.db_setup import Message, UserBehavior, ProactiveQuestion, Memory
+from db_setup import Message, UserBehavior, ProactiveQuestion, Memory
 from datetime import datetime, timedelta
 import os
 import json

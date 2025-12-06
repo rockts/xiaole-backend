@@ -8,7 +8,7 @@ import jieba
 import math
 from collections import Counter
 from typing import List, Tuple, Dict
-from backend.logger import logger
+from logger import logger
 
 
 class SemanticSearchManager:

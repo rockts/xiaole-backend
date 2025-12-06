@@ -1,9 +1,9 @@
-from backend.agent import XiaoLeAgent
-from backend.conflict_detector import ConflictDetector
-from backend.proactive_qa import ProactiveQA
-from backend.reminder_manager import get_reminder_manager
-from backend.scheduler import get_scheduler
-from backend.task_manager import get_task_manager
+from agent import XiaoLeAgent
+from conflict_detector import ConflictDetector
+from proactive_qa import ProactiveQA
+from reminder_manager import get_reminder_manager
+from scheduler import get_scheduler
+from task_manager import get_task_manager
 
 # Global instances
 _xiaole_agent = None

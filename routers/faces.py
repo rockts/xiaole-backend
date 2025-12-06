@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, HTTPException
-from backend.face_manager import FaceManager
-from backend.db_setup import SessionLocal, FaceEncoding
+from face_manager import FaceManager
+from db_setup import SessionLocal, FaceEncoding
 import os
 
 router = APIRouter(

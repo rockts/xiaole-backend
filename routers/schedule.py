@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from backend.memory import MemoryManager
+from memory import MemoryManager
 from sqlalchemy import or_
-from backend.db_setup import Memory
+from db_setup import Memory
 import re
 
 router = APIRouter(

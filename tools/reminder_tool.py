@@ -4,7 +4,7 @@
 """
 from datetime import datetime, timedelta
 import re
-from backend.tool_manager import Tool, ToolParameter
+from tool_manager import Tool, ToolParameter
 
 
 class ReminderTool(Tool):

@@ -23,21 +23,14 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 工作目录
 WORKDIR /app
 
-# 复制后端代码
-COPY backend/ ./backend/
-COPY tools/ ./tools/
-COPY scripts/ ./scripts/
-COPY requirements.txt ./
-COPY start_services.sh ./
+# 复制所有后端代码
+COPY . .
 
 # 安装 Python 依赖
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir -r requirements.txt
 
-# 添加执行权限
-RUN chmod +x start_services.sh
-
 # 暴露端口
-EXPOSE 8000 9000
+EXPOSE 8000
 
 # 启动服务
-CMD ["bash", "start_services.sh"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

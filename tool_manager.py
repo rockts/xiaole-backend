@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
 import json
-from backend.db_setup import SessionLocal, ToolExecution
+from db_setup import SessionLocal, ToolExecution
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 from sqlalchemy import func, or_
-from backend.db_setup import Memory, SessionLocal
+from db_setup import Memory, SessionLocal
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from backend.semantic_search import SemanticSearchManager
+from semantic_search import SemanticSearchManager
 
 load_dotenv()
 

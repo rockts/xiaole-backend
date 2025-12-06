@@ -49,7 +49,7 @@ class BehaviorAnalyzer:
             user_id: 用户ID
             session_id: 会话ID
         """
-        from backend.db_setup import Message, UserBehavior
+        from db_setup import Message, UserBehavior
 
         # 创建独立session
         session = SessionLocal()
@@ -295,7 +295,7 @@ class BehaviorAnalyzer:
                 "most_active_day": "周三"
             }
         """
-        from backend.db_setup import UserBehavior
+        from db_setup import UserBehavior
 
         session = SessionLocal()
         try:
@@ -352,7 +352,7 @@ class BehaviorAnalyzer:
                 "total_topics": 50
             }
         """
-        from backend.db_setup import UserBehavior
+        from db_setup import UserBehavior
 
         session = SessionLocal()
         try:
@@ -397,7 +397,7 @@ class BehaviorAnalyzer:
         Returns:
             对话统计信息
         """
-        from backend.db_setup import UserBehavior
+        from db_setup import UserBehavior
 
         session = SessionLocal()
         try:
@@ -451,7 +451,7 @@ class BehaviorAnalyzer:
         """
         获取高级统计数据 (情感趋势, 交互类型分布)
         """
-        from backend.db_setup import UserBehavior
+        from db_setup import UserBehavior
 
         session = SessionLocal()
         try:

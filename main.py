@@ -4,16 +4,16 @@ from fastapi.staticfiles import StaticFiles
 from typing import List
 import os
 
-from backend.routers import (
+from routers import (
     auth, chat, memories, reminders, tasks,
     tools, analytics, documents, voice,
     schedule, feedback, faces, dashboard, vision
 )
-from backend.dependencies import (
+from dependencies import (
     get_reminder_manager, get_scheduler, get_xiaole_agent
 )
-from backend.config import STATIC_DIR, UPLOADS_DIR, FILES_DIR
-from backend.logger import logger
+from config import STATIC_DIR, UPLOADS_DIR, FILES_DIR
+from logger import logger
 
 app = FastAPI(
     title="小乐 AI 管家",

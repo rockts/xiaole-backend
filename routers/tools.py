@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any, Optional
-from backend.dependencies import get_xiaole_agent
-from backend.agent import XiaoLeAgent
+from dependencies import get_xiaole_agent
+from agent import XiaoLeAgent
 
 router = APIRouter(
     prefix="/tools",

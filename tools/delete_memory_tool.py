@@ -6,8 +6,8 @@ from typing import Optional
 import logging
 from datetime import datetime, timedelta
 from sqlalchemy import and_, or_
-from backend.db_setup import Memory, SessionLocal
-from backend.tool_manager import Tool, ToolParameter
+from db_setup import Memory, SessionLocal
+from tool_manager import Tool, ToolParameter
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 任务管理工具
 支持查询和删除任务
 """
-from backend.tool_manager import Tool, ToolParameter
+from tool_manager import Tool, ToolParameter
 import logging
 
 logger = logging.getLogger(__name__)

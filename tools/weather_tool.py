@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 import aiohttp
 from datetime import datetime
-from backend.tool_manager import Tool, ToolParameter
+from tool_manager import Tool, ToolParameter
 
 logger = logging.getLogger(__name__)
 

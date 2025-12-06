@@ -7,8 +7,8 @@ import logging
 import asyncio
 from typing import Dict, Any, Optional
 
-from backend.task_manager import TaskManager
-from backend.tool_manager import ToolRegistry
+from task_manager import TaskManager
+from tool_manager import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
-from backend.dependencies import get_xiaole_agent, get_proactive_qa
-from backend.agent import XiaoLeAgent
-from backend.proactive_qa import ProactiveQA
-from backend.auth import get_current_user
-from backend.logger import logger
+from dependencies import get_xiaole_agent, get_proactive_qa
+from agent import XiaoLeAgent
+from proactive_qa import ProactiveQA
+from auth import get_current_user
+from logger import logger
 
 
 # 请求体模型（用于接收POST body中的图片路径）

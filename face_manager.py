@@ -4,7 +4,7 @@ except ImportError:
     np = None
 
 from sqlalchemy.orm import Session
-from backend.db_setup import SessionLocal, FaceEncoding
+from db_setup import SessionLocal, FaceEncoding
 import logging
 import os
 

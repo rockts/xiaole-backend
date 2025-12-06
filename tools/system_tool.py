@@ -8,7 +8,7 @@ import psutil
 from typing import Dict, Any
 from datetime import datetime
 import logging
-from backend.tool_manager import Tool, ToolParameter
+from tool_manager import Tool, ToolParameter
 
 logger = logging.getLogger(__name__)
 

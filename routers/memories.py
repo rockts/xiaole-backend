@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, Optional, List
-from backend.dependencies import get_xiaole_agent, get_conflict_detector
-from backend.agent import XiaoLeAgent
-from backend.conflict_detector import ConflictDetector
-from backend.memory import MemoryManager
-from backend.logger import logger
+from dependencies import get_xiaole_agent, get_conflict_detector
+from agent import XiaoLeAgent
+from conflict_detector import ConflictDetector
+from memory import MemoryManager
+from logger import logger
 
 router = APIRouter(
     prefix="",

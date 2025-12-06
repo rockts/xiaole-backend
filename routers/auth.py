@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from pydantic import BaseModel
-from backend.auth import (
+from auth import (
     create_access_token,
     verify_password,
     ADMIN_USERNAME,

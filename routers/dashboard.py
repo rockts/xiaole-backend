@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
-from backend.dependencies import (
+from dependencies import (
     get_xiaole_agent, get_reminder_manager, get_task_manager
 )
-from backend.agent import XiaoLeAgent
-from backend.reminder_manager import ReminderManager
-from backend.task_manager import TaskManager
-from backend.auth import get_current_user
+from agent import XiaoLeAgent
+from reminder_manager import ReminderManager
+from task_manager import TaskManager
+from auth import get_current_user
 import psutil
 import os
 

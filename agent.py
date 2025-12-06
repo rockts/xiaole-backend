@@ -1,13 +1,13 @@
-from backend.memory import MemoryManager
-from backend.conversation import ConversationManager
-from backend.behavior_analytics import BehaviorAnalyzer
-from backend.proactive_qa import ProactiveQA  # v0.3.0 主动问答
-from backend.pattern_learning import PatternLearner  # v0.3.0 模式学习
-from backend.tool_manager import get_tool_registry  # v0.4.0 工具管理
-from backend.enhanced_intent import EnhancedToolSelector, ContextEnhancer
-from backend.dialogue_enhancer import DialogueEnhancer  # v0.6.0
-from backend.task_manager import TaskManager  # v0.8.0 任务管理
-from backend.error_handler import (
+from memory import MemoryManager
+from conversation import ConversationManager
+from behavior_analytics import BehaviorAnalyzer
+from proactive_qa import ProactiveQA  # v0.3.0 主动问答
+from pattern_learning import PatternLearner  # v0.3.0 模式学习
+from tool_manager import get_tool_registry  # v0.4.0 工具管理
+from enhanced_intent import EnhancedToolSelector, ContextEnhancer
+from dialogue_enhancer import DialogueEnhancer  # v0.6.0
+from task_manager import TaskManager  # v0.8.0 任务管理
+from error_handler import (
     retry_with_backoff, log_execution, handle_api_errors,
     logger
 )
@@ -19,8 +19,8 @@ import re
 import asyncio  # v0.4.0 用于同步执行异步工具调用
 import sys
 
-# 将项目根目录添加到 sys.path，以便导入 tools 模块
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 将当前目录添加到 sys.path，以便导入 tools 模块
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
 
@@ -50,7 +50,7 @@ class XiaoLeAgent:
         self.task_manager = TaskManager(db_config)
 
         # v0.8.0 任务执行器(延迟导入避免循环依赖)
-        from backend.task_executor import TaskExecutor
+        from task_executor import TaskExecutor
         self.task_executor = TaskExecutor(
             self.task_manager, self.tool_registry
         )

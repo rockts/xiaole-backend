@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from backend.reminder_manager import get_db_connection
+from reminder_manager import get_db_connection
 
 router = APIRouter(
     prefix="/feedback",

@@ -16,10 +16,10 @@ v0.6.2更新:
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from backend.db_setup import ProactiveQuestion, Message
+from db_setup import ProactiveQuestion, Message
 from datetime import datetime, timedelta
-from backend.memory import MemoryManager
-from backend.learning import get_learning_manager  # v0.7.0 学习层集成
+from memory import MemoryManager
+from learning import get_learning_manager  # v0.7.0 学习层集成
 import os
 import re
 import json
@@ -888,7 +888,7 @@ class ProactiveQA:
         session = SessionLocal()
         try:
             # 先获取该会话的user_id
-            from backend.db_setup import Message
+            from db_setup import Message
             msg = session.query(Message).filter_by(
                 session_id=session_id).first()
             user_id = msg.user_id if msg else "default_user"
@@ -950,7 +950,7 @@ class ProactiveQA:
         try:
             # 如果没有指定user_id，尝试从session_id获取
             if not user_id and session_id:
-                from backend.db_setup import Message
+                from db_setup import Message
                 msg = session.query(Message).filter_by(
                     session_id=session_id
                 ).first()

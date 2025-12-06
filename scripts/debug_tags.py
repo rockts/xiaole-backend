@@ -1,5 +1,5 @@
 from sqlalchemy import func
-from backend.db_setup import SessionLocal, Memory
+from db_setup import SessionLocal, Memory
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
