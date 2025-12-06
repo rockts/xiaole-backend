@@ -13,3 +13,4 @@
    - 详细文档（使用指南、教程等）应移到 xiaole-ai 仓库
    - 项目说明（README.md）保留在当前仓库
    - 开发上下文（docs/DEV_CONTEXT.md）保留在当前仓库（iCloud 同步）
+   - **创建新文档时**：使用 `./scripts/create-doc.sh <类型> <名称>` 直接创建到文档库
