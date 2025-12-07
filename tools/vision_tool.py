@@ -86,7 +86,8 @@ class VisionTool(Tool):
                     full_path)
 
                 if recognition_result and recognition_result.get('success'):
-                    identified_people = recognition_result.get('identified_people', [])
+                    identified_people = recognition_result.get(
+                        'identified_people', [])
                     face_count = recognition_result.get('face_count', 0)
                     face_details = recognition_result.get('faces', [])
 
@@ -127,7 +128,8 @@ class VisionTool(Tool):
                         # No faces found
                         pass
                 else:
-                    error_msg = recognition_result.get('error', '未知错误') if recognition_result else '人脸识别返回空结果'
+                    error_msg = recognition_result.get(
+                        'error', '未知错误') if recognition_result else '人脸识别返回空结果'
                     logger.warning(
                         "Face recognition warning: %s", error_msg)
                     face_info = "【人脸识别】人脸检测过程中出现错误，跳过此步骤。\n"
