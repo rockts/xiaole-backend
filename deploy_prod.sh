@@ -39,11 +39,11 @@ if [ ! -z "$BAIDU_APP_ID" ]; then
 fi
 
 mkdir -p $LOGS_DIR
-mkdir -p $REPO_DIR/backend/uploads/images
+mkdir -p $REPO_DIR/uploads/images
 mkdir -p $REPO_DIR/files
 
 # 确保目录权限开放,防止容器无权写入
-chmod -R 777 $REPO_DIR/backend/uploads
+chmod -R 777 $REPO_DIR/uploads
 chmod -R 777 $REPO_DIR/files
 chmod -R 777 $LOGS_DIR
 
@@ -59,9 +59,7 @@ sudo docker run -d --name xiaole-ai \
   -v /etc/localtime:/etc/localtime:ro \
   -e TZ=Asia/Shanghai \
   -v $LOGS_DIR:/app/logs \
-  -v $REPO_DIR/backend:/app/backend \
-  -v $REPO_DIR/tools:/app/tools \
-  -v $REPO_DIR/backend/uploads:/app/backend/uploads \
+  -v $REPO_DIR/uploads:/app/uploads \
   -v $REPO_DIR/files:/app/files \
   --env-file .env \
   rockts/xiaole-backend:latest

@@ -30,7 +30,7 @@ class FileTool(Tool):
 
     ALLOWED_DIRS = [
         str(PROJECT_ROOT / "files"),  # 项目下的files目录
-        str(PROJECT_ROOT / "backend" / "uploads"),  # 上传文件的目录
+        str(PROJECT_ROOT / "uploads"),  # 上传文件的目录
         "/tmp/xiaole_files",  # 备用临时目录
     ]
 
