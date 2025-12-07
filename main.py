@@ -24,19 +24,21 @@ app = FastAPI(
 )
 
 # 全局异常处理器
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """全局异常处理器，确保所有异常都能被捕获并返回正确的响应"""
     error_detail = str(exc)
     error_traceback = traceback.format_exc()
-    
+
     logger.error(
         f"❌ 未捕获的异常: {error_detail}\n"
         f"请求路径: {request.url.path}\n"
         f"请求方法: {request.method}\n"
         f"异常堆栈:\n{error_traceback}"
     )
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
