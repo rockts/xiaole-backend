@@ -48,7 +48,7 @@ chmod -R 777 $REPO_DIR/files
 chmod -R 777 $LOGS_DIR
 
 echo "🚀 拉取最新镜像"
-sudo docker pull rockts/xiaole-ai:latest
+sudo docker pull rockts/xiaole-backend:latest
 
 echo "🚀 重启后端容器"
 sudo docker rm -f xiaole-ai 2>/dev/null || true
@@ -64,7 +64,7 @@ sudo docker run -d --name xiaole-ai \
   -v $REPO_DIR/backend/uploads:/app/backend/uploads \
   -v $REPO_DIR/files:/app/files \
   --env-file .env \
-  rockts/xiaole-ai:latest
+  rockts/xiaole-backend:latest
 
 echo "🩺 健康检查..."
 # 循环检查服务状态,最多等待 30 秒
