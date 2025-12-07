@@ -13,6 +13,10 @@ from logger import logger
 class ChatBody(BaseModel):
     image_path: Optional[str] = None
 
+    class Config:
+        # 允许请求体为空或缺失
+        extra = "allow"
+
 
 router = APIRouter(
     prefix="",
@@ -49,7 +53,7 @@ def chat(
     current_user: str = Depends(get_current_user),
     agent: XiaoLeAgent = Depends(get_agent),
     qa: ProactiveQA = Depends(get_qa),
-    body: Optional[ChatBody] = None
+    body: Optional[ChatBody] = Body(None)
 ):
     """支持上下文的对话接口"""
     # 使用认证用户ID覆盖请求中的user_id
@@ -58,8 +62,10 @@ def chat(
     # 从body中获取image_path；若无，则回退使用query/form中的image_path
     body_image_path = None
     try:
-        body_image_path = body.image_path if body else None
-    except Exception:
+        if body is not None:
+            body_image_path = getattr(body, 'image_path', None)
+    except Exception as e:
+        logger.warning(f"⚠️ 解析请求体失败: {e}")
         body_image_path = None
 
     effective_image_path = body_image_path or image_path
@@ -379,7 +385,7 @@ def chat_stream(
     current_user: str = Depends(get_current_user),
     agent: XiaoLeAgent = Depends(get_agent),
     qa: ProactiveQA = Depends(get_qa),
-    body: Optional[ChatBody] = None
+    body: Optional[ChatBody] = Body(None)
 ):
     """流式对话接口（SSE 兼容）。
 
