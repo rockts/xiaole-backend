@@ -51,8 +51,8 @@ echo "🚀 拉取最新镜像"
 sudo docker pull rockts/xiaole-backend:latest
 
 echo "🚀 重启后端容器"
-sudo docker rm -f xiaole-ai 2>/dev/null || true
-sudo docker run -d --name xiaole-ai \
+sudo docker rm -f xiaole-backend 2>/dev/null || true
+sudo docker run -d --name xiaole-backend \
   --restart=always \
   -p 8000:8000 \
   -p 9000:9000 \
@@ -76,7 +76,7 @@ for i in {1..15}; do
 done
 
 if ! curl -s http://127.0.0.1:8000/health > /dev/null; then
-    echo "⚠️ FastAPI 未响应，请检查 docker logs xiaole-ai"
+    echo "⚠️ FastAPI 未响应，请检查 docker logs xiaole-backend"
 fi
 
 
