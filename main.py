@@ -22,12 +22,28 @@ app = FastAPI(
 )
 
 # 配置CORS
+# 注意：当 allow_credentials=True 时，不能使用 allow_origins=["*"]
+# 必须明确指定允许的域名
+allowed_origins = [
+    "https://ai.leke.xyz",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+# 如果环境变量设置了额外域名，添加到列表中
+extra_origins = os.getenv("CORS_ORIGINS", "").split(",")
+if extra_origins and extra_origins[0]:
+    allowed_origins.extend([origin.strip()
+                           for origin in extra_origins if origin.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # 自定义StaticFiles类，禁用缓存
@@ -137,20 +153,37 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_manager.disconnect(websocket)
 
 # 注册路由
-app.include_router(auth.router)
-app.include_router(chat.router)
-app.include_router(memories.router)
-app.include_router(reminders.router)
-app.include_router(tasks.router)
-app.include_router(tools.router)
-app.include_router(analytics.router)
-app.include_router(documents.router)
-app.include_router(voice.router)
-app.include_router(schedule.router)
-app.include_router(feedback.router)
-app.include_router(faces.router)
-app.include_router(dashboard.router)
-app.include_router(vision.router)
+# 同时注册 /api 前缀版本（生产环境）和无前缀版本（开发环境兼容）
+app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(chat.router, prefix="/api", tags=["chat"])
+app.include_router(memories.router, prefix="/api", tags=["memory"])
+app.include_router(reminders.router, prefix="/api", tags=["reminders"])
+app.include_router(tasks.router, prefix="/api", tags=["tasks"])
+app.include_router(tools.router, prefix="/api", tags=["tools"])
+app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+app.include_router(documents.router, prefix="/api", tags=["documents"])
+app.include_router(voice.router, prefix="/api", tags=["voice"])
+app.include_router(schedule.router, prefix="/api", tags=["schedule"])
+app.include_router(feedback.router, prefix="/api", tags=["feedback"])
+app.include_router(faces.router, prefix="/api", tags=["faces"])
+app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
+app.include_router(vision.router, prefix="/api", tags=["vision"])
+
+# 同时注册无前缀版本（开发环境兼容）
+app.include_router(auth.router, tags=["auth"])
+app.include_router(chat.router, tags=["chat"])
+app.include_router(memories.router, tags=["memory"])
+app.include_router(reminders.router, tags=["reminders"])
+app.include_router(tasks.router, tags=["tasks"])
+app.include_router(tools.router, tags=["tools"])
+app.include_router(analytics.router, tags=["analytics"])
+app.include_router(documents.router, tags=["documents"])
+app.include_router(voice.router, tags=["voice"])
+app.include_router(schedule.router, tags=["schedule"])
+app.include_router(feedback.router, tags=["feedback"])
+app.include_router(faces.router, tags=["faces"])
+app.include_router(dashboard.router, tags=["dashboard"])
+app.include_router(vision.router, tags=["vision"])
 
 
 @app.get("/health")
