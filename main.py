@@ -1,8 +1,10 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from typing import List
 import os
+import traceback
 
 from routers import (
     auth, chat, memories, reminders, tasks,
@@ -20,6 +22,29 @@ app = FastAPI(
     description="个人 AI 助手系统",
     version="0.8.0",
 )
+
+# 全局异常处理器
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """全局异常处理器，确保所有异常都能被捕获并返回正确的响应"""
+    error_detail = str(exc)
+    error_traceback = traceback.format_exc()
+    
+    logger.error(
+        f"❌ 未捕获的异常: {error_detail}\n"
+        f"请求路径: {request.url.path}\n"
+        f"请求方法: {request.method}\n"
+        f"异常堆栈:\n{error_traceback}"
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "服务器内部错误，请稍后重试",
+            "error": error_detail,
+            "path": str(request.url.path)
+        }
+    )
 
 # 配置CORS
 # 注意：当 allow_credentials=True 时，不能使用 allow_origins=["*"]
