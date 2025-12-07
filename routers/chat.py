@@ -111,17 +111,92 @@ def chat(
                     '如能识别品牌请直接说明。'
                 )
 
-            vision_result = vision_tool.analyze_image(
-                image_path=effective_image_path,
-                prompt=ocr_prompt,
-                prefer_model="auto"
+            # 添加超时保护，避免图片识别卡住导致请求超时
+            import threading
+            import time
+
+            vision_result = None
+            vision_error = None
+            vision_completed = threading.Event()
+
+            def analyze_with_timeout():
+                nonlocal vision_result, vision_error
+                try:
+                    logger.info("🔄 开始执行图片识别...")
+                    result = vision_tool.analyze_image(
+                        image_path=effective_image_path,
+                        prompt=ocr_prompt,
+                        prefer_model="auto"
+                    )
+                    # 确保返回的是字典类型
+                    if result is None:
+                        logger.error("❌ analyze_image 返回了 None")
+                        vision_result = {
+                            "success": False,
+                            "error": "图片识别返回空结果"
+                        }
+                    elif not isinstance(result, dict):
+                        logger.error(
+                            "❌ analyze_image 返回了非字典类型: %s",
+                            type(result)
+                        )
+                        vision_result = {
+                            "success": False,
+                            "error": f"图片识别返回了无效类型: {type(result)}"
+                        }
+                    else:
+                        vision_result = result
+                        logger.info(
+                            "✅ 图片识别执行完成: success=%s",
+                            vision_result.get('success')
+                        )
+                except Exception as e:
+                    vision_error = str(e)
+                    logger.error(
+                        "❌ 图片识别过程中异常: %s", e, exc_info=True
+                    )
+                    vision_result = {"success": False, "error": str(e)}
+                finally:
+                    vision_completed.set()
+
+            # 在单独线程中执行，避免阻塞
+            analyze_thread = threading.Thread(
+                target=analyze_with_timeout, daemon=True
             )
+            start_time = time.time()
+            analyze_thread.start()
 
-            logger.info("✅ 图片识别完成: success=%s, model=%s",
+            # 等待完成或超时
+            completed = vision_completed.wait(timeout=30)  # 30秒超时
+
+            elapsed = time.time() - start_time
+
+            if not completed:
+                logger.error("❌ 图片识别超时（%.1f秒）", elapsed)
+                vision_result = {
+                    "success": False,
+                    "error": "图片识别超时，请稍后重试"
+                }
+            elif vision_error and (
+                not vision_result or not isinstance(vision_result, dict)
+            ):
+                vision_result = {"success": False, "error": vision_error}
+            elif not vision_result or not isinstance(vision_result, dict):
+                logger.warning(
+                    "⚠️ 图片识别未返回结果: vision_result=%s, type=%s",
+                    vision_result, type(vision_result)
+                )
+                vision_result = {
+                    "success": False,
+                    "error": "图片识别未返回结果"
+                }
+
+            logger.info("✅ 图片识别完成: success=%s, model=%s, error=%s",
                         vision_result.get('success'),
-                        vision_result.get('model', 'unknown'))
+                        vision_result.get('model', 'unknown'),
+                        vision_result.get('error') if not vision_result.get('success') else None)
 
-            if vision_result.get('success'):
+            if vision_result and vision_result.get('success'):
                 vision_description = vision_result.get('description', '')
 
                 safety_instruction = (
@@ -173,18 +248,21 @@ def chat(
 
                 if should_memorize:
                     try:
+                        # 使用 effective_image_path 而不是 image_path
+                        filename = effective_image_path.split(
+                            '/')[-1] if effective_image_path else 'unknown'
                         agent.memory.remember(
                             content=vision_description,
-                            tag=f"image:{image_path.split('/')[-1]}"
+                            tag=f"image:{filename}"
                         )
                         combined_prompt += "\n\n[系统提示：这张图片的内容我已经记住了，以后可以回忆]"
                     except Exception as e:
                         logger.error(f"⚠️ 保存图片记忆失败: {e}")
 
-                # 图片识别已完成,不再传递image_path避免重复处理
+                # 图片识别已完成,但仍需传递image_path以保存到消息中供前端显示
                 agent_result = agent.chat(
                     combined_prompt, session_id, user_id, response_style,
-                    image_path=None,
+                    image_path=effective_image_path,  # 保存图片路径供前端显示
                     original_user_prompt=prompt
                 )
 
@@ -218,24 +296,57 @@ def chat(
 
                 return agent_result
             else:
-                error_msg = vision_result.get('error', '未知错误')
+                error_msg = vision_result.get(
+                    'error', '未知错误') if vision_result else '图片识别失败'
                 logger.error("❌ 图片识别失败: %s", error_msg)
                 # 降级处理：调用 agent.chat 确保用户消息被保存
+                # 重要：在 prompt 中明确告诉 agent 不要再次调用 vision 工具
+                try:
+                    fallback_prompt = (
+                        f"{prompt}\n"
+                        f"[系统提示：用户上传了图片，但图片识别已失败: {error_msg}。"
+                        f"请直接回答用户的问题，不要再次尝试调用 vision_analysis 工具。"
+                        f"如果无法识别图片内容，请礼貌地告知用户图片识别失败，建议稍后重试或描述图片内容。]"
+                    )
+                    return agent.chat(
+                        fallback_prompt,
+                        session_id, user_id, response_style,
+                        image_path=effective_image_path,
+                        original_user_prompt=prompt
+                    )
+                except Exception as agent_error:
+                    logger.error(f"❌ 降级处理也失败: {agent_error}", exc_info=True)
+                    # 最后的安全返回
+                    return {
+                        "reply": f"抱歉，图片识别失败：{error_msg}。请稍后重试，或者您可以描述一下图片内容，我来帮您分析。",
+                        "session_id": session_id,
+                        "error": error_msg
+                    }
+        except Exception as e:
+            logger.error("❌ 图片处理异常: %s", str(e), exc_info=True)
+            # 降级处理：调用 agent.chat 确保用户消息被保存
+            # 重要：在 prompt 中明确告诉 agent 不要再次调用 vision 工具
+            try:
+                fallback_prompt = (
+                    f"{prompt}\n"
+                    f"[系统提示：用户上传了图片，但图片处理出错: {str(e)}。"
+                    f"请直接回答用户的问题，不要再次尝试调用 vision_analysis 工具。"
+                    f"如果无法识别图片内容，请礼貌地告知用户图片处理出错，建议稍后重试或描述图片内容。]"
+                )
                 return agent.chat(
-                    f"{prompt}\n[系统提示：图片识别失败: {error_msg}]",
+                    fallback_prompt,
                     session_id, user_id, response_style,
                     image_path=effective_image_path,
                     original_user_prompt=prompt
                 )
-        except Exception as e:
-            logger.error("❌ 图片处理异常: %s", str(e), exc_info=True)
-            # 降级处理：调用 agent.chat 确保用户消息被保存
-            return agent.chat(
-                f"{prompt}\n[系统提示：图片处理出错: {str(e)}]",
-                session_id, user_id, response_style,
-                image_path=effective_image_path,
-                original_user_prompt=prompt
-            )
+            except Exception as agent_error:
+                logger.error(f"❌ 降级处理也失败: {agent_error}", exc_info=True)
+                # 最后的安全返回
+                return {
+                    "reply": f"抱歉，处理图片时出现了错误：{str(e)}。请稍后重试，或者您可以描述一下图片内容，我来帮您分析。",
+                    "session_id": session_id,
+                    "error": str(e)
+                }
 
     result = agent.chat(prompt, session_id, user_id, response_style)
 

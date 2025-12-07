@@ -77,6 +77,7 @@ class VisionTool(Tool):
                 return {"success": False, "error": f"Image file not found: {image_path}"}
 
             # Step 1: Face Recognition using FaceManager
+            # 重要：即使人脸识别失败，也要继续执行视觉分析
             face_info = ""
             face_details: List[Dict[str, Any]] = []
             try:
@@ -84,9 +85,9 @@ class VisionTool(Tool):
                 recognition_result = self.face_manager.recognize_faces(
                     full_path)
 
-                if recognition_result['success']:
-                    identified_people = recognition_result['identified_people']
-                    face_count = recognition_result['face_count']
+                if recognition_result and recognition_result.get('success'):
+                    identified_people = recognition_result.get('identified_people', [])
+                    face_count = recognition_result.get('face_count', 0)
                     face_details = recognition_result.get('faces', [])
 
                     # threshold for announcing identities - 提高到0.75
@@ -126,12 +127,13 @@ class VisionTool(Tool):
                         # No faces found
                         pass
                 else:
+                    error_msg = recognition_result.get('error', '未知错误') if recognition_result else '人脸识别返回空结果'
                     logger.warning(
-                        f"Face recognition warning: {recognition_result.get('error')}")
+                        "Face recognition warning: %s", error_msg)
                     face_info = "【人脸识别】人脸检测过程中出现错误，跳过此步骤。\n"
 
             except Exception as e:
-                logger.error(f"Face recognition failed: {e}")
+                logger.error("Face recognition failed: %s", e, exc_info=True)
                 face_info = "【人脸识别】人脸检测过程中出现错误，跳过此步骤。\n"
 
             # Step 2: Vision LLM Analysis
@@ -147,16 +149,28 @@ class VisionTool(Tool):
                     "error": "No suitable vision model configured. Please set QWEN_API_KEY or CLAUDE_API_KEY."
                 }
 
+            # 确保 llm_result 不为 None
+            if not llm_result:
+                logger.error("❌ analyze_with_qwen/claude 返回了 None")
+                llm_result = {
+                    "success": False,
+                    "description": "",
+                    "model": "unavailable",
+                    "error": "视觉模型调用返回空结果"
+                }
+
             if not llm_result.get("success"):
                 # 模型不可用时，仍返回人脸识别结果，描述为空
-                llm_result = {"success": False,
-                              "description": "", "model": "unavailable"}
+                if not llm_result.get("description"):
+                    llm_result["description"] = ""
+                if not llm_result.get("model"):
+                    llm_result["model"] = "unavailable"
 
             # Combine results
             final_description = face_info + "\n" + \
                 llm_result.get("description", "")
 
-            return {
+            result = {
                 "success": True,
                 "description": final_description.strip(),
                 "model": llm_result.get("model", "unknown"),
@@ -164,8 +178,17 @@ class VisionTool(Tool):
                 "face_details": face_details
             }
 
+            # 确保返回的是字典
+            logger.info(
+                "✅ analyze_image 完成: success=%s, model=%s, desc_len=%d",
+                result.get("success"),
+                result.get("model"),
+                len(result.get("description", ""))
+            )
+            return result
+
         except Exception as e:
-            logger.error(f"Analyze image failed: {e}", exc_info=True)
+            logger.error("Analyze image failed: %s", e, exc_info=True)
             return {"success": False, "error": str(e)}
 
     def analyze_with_qwen(self, image_path: str, prompt: str) -> Dict[str, Any]:

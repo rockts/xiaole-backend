@@ -69,7 +69,18 @@ class FaceManager:
                     "success": False,
                     "error": "numpy is not installed, cannot register face"
                 }
-            import face_recognition
+            # 检查 face_recognition 是否可用
+            try:
+                import face_recognition
+            except (ImportError, Exception) as e:
+                logger.warning(
+                    "face_recognition 导入失败，无法注册人脸: %s", e
+                )
+                return {
+                    "success": False,
+                    "error": f"face_recognition 未正确安装: {str(e)}"
+                }
+
             # Load image
             image = face_recognition.load_image_file(image_path)
 
@@ -165,11 +176,38 @@ class FaceManager:
                     "error": "numpy is not installed"
                 }
 
+            # 检查 face_recognition 是否可用
+            # 注意：face_recognition 导入时可能会检查模型文件，如果模型文件不存在
+            # 可能会抛出 RuntimeError 或其他异常，需要捕获所有异常类型
+            try:
+                import face_recognition
+            except (ImportError, RuntimeError, SystemExit, Exception) as e:
+                # 捕获所有可能的异常，包括模型文件缺失导致的异常
+                error_msg = str(e)
+                logger.warning(
+                    "face_recognition 导入/初始化失败，跳过人脸识别: %s",
+                    error_msg
+                )
+                return {
+                    "success": False,
+                    "error": f"face_recognition 不可用: {error_msg}"
+                }
+
             known_encodings, known_names = self.get_known_faces(user_id)
 
-            import face_recognition
-            image = face_recognition.load_image_file(image_path)
-            face_locations = face_recognition.face_locations(image)
+            # 再次检查 face_recognition 是否可用（防止导入后但在使用时出错）
+            try:
+                image = face_recognition.load_image_file(image_path)
+                face_locations = face_recognition.face_locations(image)
+            except (RuntimeError, AttributeError, Exception) as e:
+                # 如果使用 face_recognition 时出错（如模型文件缺失），返回错误
+                logger.warning(
+                    "face_recognition 使用失败: %s", e
+                )
+                return {
+                    "success": False,
+                    "error": f"face_recognition 使用失败: {str(e)}"
+                }
 
             if not face_locations:
                 return {
