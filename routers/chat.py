@@ -504,14 +504,16 @@ def chat_stream(
                         # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
                         import re
                         original_len = len(desc)
-                        # 修复 $\alp$h$a$ -> $\alpha$（注意：实际拆分是连续的字符串）
-                        desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', desc)
-                        desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', desc)
-                        # 修复 $\be$t$a$ -> $\beta$
-                        desc = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', desc)
+                        # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
+                        desc = re.sub(r'\$\\alp\$h\$a\$', r'$\alpha$', desc)
+                        desc = re.sub(r'\$\x07lp\$h\$a\$', r'$\alpha$', desc)  # 转义字符版本
+                        desc = re.sub(r'\$\\alph\$a\$', r'$\alpha$', desc)
+                        # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
+                        desc = re.sub(r'\$\\be\$t\$a\$', r'$\beta$', desc)
+                        desc = re.sub(r'\$\x08e\$t\$a\$', r'$\beta$', desc)  # 转义字符版本
                         # 修复 $\gam$m$a$ -> $\gamma$
-                        desc = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', desc)
-                        desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', desc)
+                        desc = re.sub(r'\$\\gam\$m\$a\$', r'$\gamma$', desc)
+                        desc = re.sub(r'\\gam\$m\$a\$', r'$\gamma$', desc)
                         # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                         desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', desc)
                         
