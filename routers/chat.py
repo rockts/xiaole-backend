@@ -506,17 +506,18 @@ def chat_stream(
                         import re
                         original_len = len(desc)
                         # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
-                        desc = re.sub(r'\$\\alp\$h\$a\$', r'$\alpha$', desc)
-                        desc = re.sub(r'\$\x07lp\$h\$a\$', r'$\alpha$', desc)  # 转义字符版本
-                        desc = re.sub(r'\$\\alph\$a\$', r'$\alpha$', desc)
+                        # 注意：替换字符串中的 $ 需要转义为 \$
+                        desc = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', desc)
+                        desc = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', desc)  # 转义字符版本
+                        desc = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', desc)
                         # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
-                        desc = re.sub(r'\$\\be\$t\$a\$', r'$\beta$', desc)
-                        desc = re.sub(r'\$\x08e\$t\$a\$', r'$\beta$', desc)  # 转义字符版本
+                        desc = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', desc)
+                        desc = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', desc)  # 转义字符版本
                         # 修复 $\gam$m$a$ -> $\gamma$
-                        desc = re.sub(r'\$\\gam\$m\$a\$', r'$\gamma$', desc)
-                        desc = re.sub(r'\\gam\$m\$a\$', r'$\gamma$', desc)
+                        desc = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', desc)
+                        desc = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', desc)
                         # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                        desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', desc)
+                        desc = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', desc)
                         
                         fixed_desc = desc[:200] if len(desc) > 200 else desc
                         logger.info(f"🔧 [流式] 修复后的图片描述（前200字）: {fixed_desc}")
