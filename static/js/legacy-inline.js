@@ -4862,32 +4862,62 @@ async function handleImageUpload(event) {
         formData.append('file', file);
         console.log('📦 FormData created');
 
-        // 上传图片
+        // 上传图片 - 使用 AbortController 设置超时
         console.log('🚀 Sending request to /api/vision/upload');
-        const response = await fetch('/api/vision/upload', {
-            method: 'POST',
-            body: formData
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
 
-        console.log('📡 Response status:', response.status);
-        const result = await response.json();
-        console.log('📋 Response data:', result);
+        try {
+            const response = await fetch('/api/vision/upload', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
 
-        if (result.success) {
-            uploadedImagePath = result.file_path;
-            console.log('✅ Upload successful, path:', uploadedImagePath);
-            showNotification('✅ 图片上传成功', 'success');
+            console.log('📡 Response status:', response.status);
+            
+            // 检查 HTTP 状态码
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ HTTP Error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('📋 Response data:', result);
 
-            // 显示图片预览
-            console.log('🖼️ Showing image preview');
-            showImagePreview(file, result.file_path);
-        } else {
-            console.log('❌ Upload failed:', result.error);
-            showNotification(`❌ 上传失败: ${result.error}`, 'error');
+            if (result.success) {
+                uploadedImagePath = result.file_path;
+                console.log('✅ Upload successful, path:', uploadedImagePath);
+                showNotification('✅ 图片上传成功', 'success');
+
+                // 显示图片预览
+                console.log('🖼️ Showing image preview');
+                showImagePreview(file, result.file_path);
+            } else {
+                console.log('❌ Upload failed:', result.error);
+                showNotification(`❌ 上传失败: ${result.error}`, 'error');
+            }
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            throw fetchError;
         }
     } catch (error) {
         console.error('💥 Upload error:', error);
-        showNotification('❌ 上传失败: 网络错误', 'error');
+        console.error('💥 Error name:', error.name);
+        console.error('💥 Error message:', error.message);
+        
+        // 提供更详细的错误信息
+        let errorMsg = '网络错误';
+        if (error.name === 'AbortError') {
+            errorMsg = '上传超时（请检查网络连接）';
+        } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMsg = '无法连接服务器（可能是CORS或网络问题）';
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+        showNotification(`❌ 上传失败: ${errorMsg}`, 'error');
     }
 }
 

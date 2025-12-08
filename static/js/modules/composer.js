@@ -150,22 +150,51 @@ export async function handleImageUpload(event) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/vision/upload', {
-            method: 'POST',
-            body: formData
-        });
+        // 使用 AbortController 设置超时
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
 
-        const result = await response.json();
+        try {
+            const response = await fetch('/api/vision/upload', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
 
-        if (result.success) {
-            uploadedImagePath = result.file_path;
-            showNotification('✅ 图片上传成功', 'success');
-            showImagePreview(file, result.file_path);
-        } else {
-            showNotification(`❌ 上传失败: ${result.error}`, 'error');
+            // 检查 HTTP 状态码
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ HTTP Error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                uploadedImagePath = result.file_path;
+                showNotification('✅ 图片上传成功', 'success');
+                showImagePreview(file, result.file_path);
+            } else {
+                showNotification(`❌ 上传失败: ${result.error}`, 'error');
+            }
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            throw fetchError;
         }
     } catch (error) {
-        showNotification('❌ 上传失败: 网络错误', 'error');
+        console.error('💥 Upload error:', error);
+        
+        // 提供更详细的错误信息
+        let errorMsg = '网络错误';
+        if (error.name === 'AbortError') {
+            errorMsg = '上传超时（请检查网络连接）';
+        } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMsg = '无法连接服务器（可能是CORS或网络问题）';
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+        showNotification(`❌ 上传失败: ${errorMsg}`, 'error');
     }
 }
 
