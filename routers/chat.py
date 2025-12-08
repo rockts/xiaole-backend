@@ -213,16 +213,16 @@ def chat(
                 
                 # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
                 import re
-                # 修复 $\\alph$a$ -> $\\alpha$
-                vision_description = re.sub(r'\$\\alph\$\s*a\s*\$', r'$\\alpha$', vision_description)
-                # 修复 $\\be$t$a -> $\\beta$
-                vision_description = re.sub(r'\$\\be\$\s*t\s*a\s*\$', r'$\\beta$', vision_description)
-                # 修复 \\gam$m$a -> $\\gamma$
-                vision_description = re.sub(r'\\gam\$\s*m\s*a\s*\$', r'$\\gamma$', vision_description)
+                # 修复 $\alp$h$a$ -> $\alpha$（注意：实际拆分是连续的字符串）
+                vision_description = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', vision_description)
+                vision_description = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', vision_description)
+                # 修复 $\be$t$a$ -> $\beta$
+                vision_description = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', vision_description)
+                # 修复 $\gam$m$a$ -> $\gamma$
+                vision_description = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', vision_description)
+                vision_description = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', vision_description)
                 # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                vision_description = re.sub(r'\$\$\s*([a-zA-Z])\s*\$', r'$\1$', vision_description)
-                # 修复其他常见的拆分模式：$符号中间被插入字符
-                # 例如：$a$b$ -> $ab$ 或保持原样（需要根据上下文判断）
+                vision_description = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_description)
                 logger.info(f"🔧 修复后的图片描述长度: {len(vision_description)}")
 
                 safety_instruction = (
@@ -489,6 +489,21 @@ def chat_stream(
 
                     if vision_result.get('success'):
                         desc = vision_result.get('description', '')
+                        
+                        # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
+                        import re
+                        # 修复 $\alp$h$a$ -> $\alpha$（注意：实际拆分是连续的字符串）
+                        desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', desc)
+                        desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', desc)
+                        # 修复 $\be$t$a$ -> $\beta$
+                        desc = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', desc)
+                        # 修复 $\gam$m$a$ -> $\gamma$
+                        desc = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', desc)
+                        desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', desc)
+                        # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
+                        desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', desc)
+                        logger.info(f"🔧 [流式] 修复后的图片描述长度: {len(desc)}")
+                        
                         safety_instruction = (
                             "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
                             "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"
