@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y \
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# 禁用人脸识别（避免 dlib/face_recognition 在某些环境下崩溃）
+ENV DISABLE_FACE_RECOGNITION=true
+
 # 工作目录
 WORKDIR /app
 
