@@ -1796,6 +1796,20 @@ class XiaoLeAgent:
                         vision_desc = vision_desc.split(
                             "我通过视觉能力识别到的图片内容：", 1
                         )[-1].strip()
+                    
+                    # 修复被拆分的 LaTeX 公式（确保即使直接返回也修复）
+                    import re
+                    # 修复 $\alp$h$a$ -> $\alpha$
+                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', vision_desc)
+                    vision_desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', vision_desc)
+                    # 修复 $\be$t$a$ -> $\beta$
+                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', vision_desc)
+                    # 修复 $\gam$m$a$ -> $\gamma$
+                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
+                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
+                    # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
+                    vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_desc)
+                    
                     # 提取用户问题
                     user_q_match = prompt.find("用户问题：")
                     if user_q_match != -1:
