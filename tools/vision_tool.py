@@ -65,7 +65,7 @@ class VisionTool(Tool):
     def analyze_image(self, image_path: str, prompt: str = None, prefer_model: str = "auto") -> Dict[str, Any]:
         """
         Analyze image content using hybrid approach:
-        1. Use FaceManager to identify known people
+        1. Use FaceManager to identify known people (可通过环境变量禁用)
         2. Use Vision LLM (Qwen-VL/Claude) for general scene description
         """
         try:
@@ -78,65 +78,72 @@ class VisionTool(Tool):
 
             # Step 1: Face Recognition using FaceManager
             # 重要：即使人脸识别失败，也要继续执行视觉分析
+            # 可通过环境变量 DISABLE_FACE_RECOGNITION=true 禁用人脸识别
             face_info = ""
             face_details: List[Dict[str, Any]] = []
-            try:
-                # Use FaceManager to recognize faces
-                recognition_result = self.face_manager.recognize_faces(
-                    full_path)
+            
+            # 检查是否禁用人脸识别（解决生产环境 dlib/face_recognition 崩溃问题）
+            disable_face = os.getenv("DISABLE_FACE_RECOGNITION", "false").lower() == "true"
+            if disable_face:
+                logger.info("⏭️ 人脸识别已禁用（DISABLE_FACE_RECOGNITION=true）")
+                recognition_result = None
+            else:
+                try:
+                    # Use FaceManager to recognize faces
+                    recognition_result = self.face_manager.recognize_faces(
+                        full_path)
+                except Exception as face_err:
+                    logger.error("❌ 人脸识别崩溃: %s", face_err, exc_info=True)
+                    recognition_result = None
 
-                if recognition_result and recognition_result.get('success'):
-                    identified_people = recognition_result.get(
-                        'identified_people', [])
-                    face_count = recognition_result.get('face_count', 0)
-                    face_details = recognition_result.get('faces', [])
+            # 处理人脸识别结果
+            if recognition_result and recognition_result.get('success'):
+                identified_people = recognition_result.get(
+                    'identified_people', [])
+                face_count = recognition_result.get('face_count', 0)
+                face_details = recognition_result.get('faces', [])
 
-                    # threshold for announcing identities - 提高到0.75
-                    try:
-                        announce_threshold = float(
-                            os.getenv("FACE_ANNOUNCE_THRESHOLD", "0.75"))
-                    except Exception:
-                        announce_threshold = 0.75
+                # threshold for announcing identities - 提高到0.75
+                try:
+                    announce_threshold = float(
+                        os.getenv("FACE_ANNOUNCE_THRESHOLD", "0.75"))
+                except Exception:
+                    announce_threshold = 0.75
 
-                    # Filter out unknown people
-                    known_people = [
-                        p for p in identified_people if p != "未知人物"]
+                # Filter out unknown people
+                known_people = [
+                    p for p in identified_people if p != "未知人物"]
 
-                    if known_people:
-                        # If low confidence, ask for confirmation
-                        low_conf = any(
-                            (d.get('name') in known_people and (
-                                d.get('confidence') or 0) < announce_threshold)
+                if known_people:
+                    # If low confidence, ask for confirmation
+                    low_conf = any(
+                        (d.get('name') in known_people and (
+                            d.get('confidence') or 0) < announce_threshold)
+                        for d in face_details
+                    )
+                    if low_conf:
+                        # 低置信度时明确要求确认，不直接断言身份
+                        conf_vals = [
+                            f"{d.get('name')}({d.get('confidence', 0):.2f})"
                             for d in face_details
+                            if d.get('name') in known_people
+                        ]
+                        face_info = (
+                            f"【人脸识别】检测到可能的匹配：{', '.join(conf_vals)}。"
+                            f"置信度较低，**请确认身份后再告诉我这是谁**，避免记录错误。\n"
                         )
-                        if low_conf:
-                            # 低置信度时明确要求确认，不直接断言身份
-                            conf_vals = [
-                                f"{d.get('name')}({d.get('confidence', 0):.2f})"
-                                for d in face_details
-                                if d.get('name') in known_people
-                            ]
-                            face_info = (
-                                f"【人脸识别】检测到可能的匹配：{', '.join(conf_vals)}。"
-                                f"置信度较低，**请确认身份后再告诉我这是谁**，避免记录错误。\n"
-                            )
-                        else:
-                            face_info = f"【人脸识别结果】图中发现了以下熟人：{', '.join(known_people)}。\n"
-                    elif face_count > 0:
-                        face_info = f"【人脸识别结果】图中发现了 {face_count} 个人，但未识别出具体身份。\n"
                     else:
-                        # No faces found
-                        pass
+                        face_info = f"【人脸识别结果】图中发现了以下熟人：{', '.join(known_people)}。\n"
+                elif face_count > 0:
+                    face_info = f"【人脸识别结果】图中发现了 {face_count} 个人，但未识别出具体身份。\n"
                 else:
-                    error_msg = recognition_result.get(
-                        'error', '未知错误') if recognition_result else '人脸识别返回空结果'
-                    logger.warning(
-                        "Face recognition warning: %s", error_msg)
-                    face_info = "【人脸识别】人脸检测过程中出现错误，跳过此步骤。\n"
-
-            except Exception as e:
-                logger.error("Face recognition failed: %s", e, exc_info=True)
-                face_info = "【人脸识别】人脸检测过程中出现错误，跳过此步骤。\n"
+                    # No faces found
+                    pass
+            elif recognition_result:
+                error_msg = recognition_result.get('error', '未知错误')
+                logger.warning("Face recognition warning: %s", error_msg)
+                # 人脸识别失败时不显示错误信息，直接跳过
+                face_info = ""
 
             # Step 2: Vision LLM Analysis
             llm_result = {}
