@@ -115,8 +115,12 @@ def chat(
                     '3. 颜色、品牌、标识等细节\n'
                     '4. 其他值得注意的特征\n\n'
                     '如能识别品牌请直接说明。\n\n'
-                    '重要：如果图片中包含数学公式、LaTeX 符号或特殊字符，请保持原始格式，'
-                    '不要拆分或修改数学符号。例如：$\\alpha$、$\\beta$、$\\gamma$ 等应保持完整。'
+                    '【⚠️ 重要：数学公式格式保护】\n'
+                    '如果图片中包含数学公式、LaTeX 符号或特殊字符，必须严格保持原始格式，'
+                    '绝对不要拆分、修改或转义这些符号。\n'
+                    '正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n'
+                    '错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n'
+                    '请确保所有数学符号和公式保持完整，不要在任何符号中间插入任何字符。'
                 )
 
             # 添加超时保护，避免图片识别卡住导致请求超时
@@ -206,13 +210,31 @@ def chat(
 
             if vision_result and vision_result.get('success'):
                 vision_description = vision_result.get('description', '')
+                
+                # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
+                import re
+                # 修复 $\\alph$a$ -> $\\alpha$
+                vision_description = re.sub(r'\$\\alph\$\s*a\s*\$', r'$\\alpha$', vision_description)
+                # 修复 $\\be$t$a -> $\\beta$
+                vision_description = re.sub(r'\$\\be\$\s*t\s*a\s*\$', r'$\\beta$', vision_description)
+                # 修复 \\gam$m$a -> $\\gamma$
+                vision_description = re.sub(r'\\gam\$\s*m\s*a\s*\$', r'$\\gamma$', vision_description)
+                # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
+                vision_description = re.sub(r'\$\$\s*([a-zA-Z])\s*\$', r'$\1$', vision_description)
+                # 修复其他常见的拆分模式：$符号中间被插入字符
+                # 例如：$a$b$ -> $ab$ 或保持原样（需要根据上下文判断）
+                logger.info(f"🔧 修复后的图片描述长度: {len(vision_description)}")
 
                 safety_instruction = (
                     "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
                     "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"
                     "当用户提问'这是什么/这是谁/这张图是什么'等时，必须直接描述图像主体、文字和关键细节。\n"
-                    "重要：如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$ 等），"
-                    "请保持原始格式，不要拆分、修改或转义这些符号。直接使用原始格式输出。"
+                    "【⚠️ 重要：数学公式格式保护】\n"
+                    "如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$ 等），"
+                    "必须严格保持原始格式，绝对不要拆分、修改或转义这些符号。\n"
+                    "正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n"
+                    "错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n"
+                    "请确保所有数学符号和公式保持完整，直接使用原始格式输出。"
                 )
 
                 if prompt:
@@ -471,8 +493,12 @@ def chat_stream(
                             "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
                             "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"
                             "当用户提问'这是什么/这是谁/这张图是什么'等时，必须直接描述图像主体、文字和关键细节。\n"
-                            "重要：如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$ 等），"
-                            "请保持原始格式，不要拆分、修改或转义这些符号。直接使用原始格式输出。"
+                            "【⚠️ 重要：数学公式格式保护】\n"
+                            "如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$ 等），"
+                            "必须严格保持原始格式，绝对不要拆分、修改或转义这些符号。\n"
+                            "正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n"
+                            "错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n"
+                            "请确保所有数学符号和公式保持完整，直接使用原始格式输出。"
                         )
 
                         if prompt:
