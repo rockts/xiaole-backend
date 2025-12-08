@@ -243,6 +243,10 @@ class VisionTool(Tool):
                 result = response.json()
                 if "output" in result and "choices" in result["output"]:
                     content = result["output"]["choices"][0]["message"]["content"][0]["text"]
+                    # 记录Qwen API的原始返回内容（前500字），用于调试LaTeX格式问题
+                    from logger import logger
+                    preview = content[:500] if len(content) > 500 else content
+                    logger.info(f"🔍 [Qwen API] 原始返回内容（前500字）: {preview}")
                     return {
                         "success": True,
                         "description": content,
