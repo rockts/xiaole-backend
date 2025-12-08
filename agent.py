@@ -792,14 +792,16 @@ class XiaoLeAgent:
                     
                     # 修复被拆分的 LaTeX 公式（确保即使直接返回也修复）
                     import re
-                    # 修复 $\alp$h$a$ -> $\alpha$
-                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', vision_desc)
-                    vision_desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', vision_desc)
-                    # 修复 $\be$t$a$ -> $\beta$
-                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', vision_desc)
+                    # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
+                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'$\alpha$', vision_desc)
+                    vision_desc = re.sub(r'\$\x07lp\$h\$a\$', r'$\alpha$', vision_desc)  # 转义字符版本
+                    vision_desc = re.sub(r'\$\\alph\$a\$', r'$\alpha$', vision_desc)
+                    # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
+                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'$\beta$', vision_desc)
+                    vision_desc = re.sub(r'\$\x08e\$t\$a\$', r'$\beta$', vision_desc)  # 转义字符版本
                     # 修复 $\gam$m$a$ -> $\gamma$
-                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
-                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
+                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'$\gamma$', vision_desc)
+                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'$\gamma$', vision_desc)
                     # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                     vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_desc)
                     
@@ -1799,14 +1801,16 @@ class XiaoLeAgent:
                     
                     # 修复被拆分的 LaTeX 公式（确保即使直接返回也修复）
                     import re
-                    # 修复 $\alp$h$a$ -> $\alpha$
-                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', vision_desc)
-                    vision_desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', vision_desc)
-                    # 修复 $\be$t$a$ -> $\beta$
-                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'$\\beta$', vision_desc)
+                    # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
+                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'$\alpha$', vision_desc)
+                    vision_desc = re.sub(r'\$\x07lp\$h\$a\$', r'$\alpha$', vision_desc)  # 转义字符版本
+                    vision_desc = re.sub(r'\$\\alph\$a\$', r'$\alpha$', vision_desc)
+                    # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
+                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'$\beta$', vision_desc)
+                    vision_desc = re.sub(r'\$\x08e\$t\$a\$', r'$\beta$', vision_desc)  # 转义字符版本
                     # 修复 $\gam$m$a$ -> $\gamma$
-                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
-                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', vision_desc)
+                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'$\gamma$', vision_desc)
+                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'$\gamma$', vision_desc)
                     # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                     vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_desc)
                     
