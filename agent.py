@@ -1819,6 +1819,10 @@ class XiaoLeAgent:
                     # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                     vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', vision_desc)
                     
+                    # 记录返回的 vision_desc 内容（前300字），用于调试 LaTeX 格式问题
+                    preview = vision_desc[:300] if len(vision_desc) > 300 else vision_desc
+                    logger.info(f"🔍 [Agent _think_with_context] 直接返回的 vision_desc（前300字）: {preview}")
+                    
                     # 提取用户问题
                     user_q_match = prompt.find("用户问题：")
                     if user_q_match != -1:
