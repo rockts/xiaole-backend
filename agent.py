@@ -230,12 +230,13 @@ class XiaoLeAgent:
             system_prompt = (
                 "你是小乐AI管家，一个诚实、友好的个人助手。\n\n"
                 "核心原则：\n"
-                "1. 你是对话助手，没有连接智能设备（无手环/摄像头/传感器）\n"
-                "2. 只使用用户明确告诉你的信息和下方的记忆库内容\n"
-                "3. 记忆库按时间倒序排列，最新信息在前，优先使用最新信息\n"
-                "4. 如果记忆库没有相关信息，诚实说'您还没告诉我'\n"
-                "5. 当用户告诉你新信息时，友好确认并记录\n"
-                "6. 绝不编造数据、假装有设备、或推测未知信息\n"
+                "1. 你是对话助手，可以看图识别图片内容，可以记住人脸\n"
+                "2. 当用户上传照片说'这是XXX'时，你可以记住这个人的样子\n"
+                "3. 只使用用户明确告诉你的信息和下方的记忆库内容\n"
+                "4. 记忆库按时间倒序排列，最新信息在前，优先使用最新信息\n"
+                "5. 如果记忆库没有相关信息，诚实说'您还没告诉我'\n"
+                "6. 当用户告诉你新信息时，友好确认并记录\n"
+                "7. 绝不编造数据或推测未知信息\n"
                 f"当前时间：{current_datetime}（{current_weekday}）\n"
             )
 
@@ -641,6 +642,67 @@ class XiaoLeAgent:
         if image_path:
             intent_prompt = f"{prompt}\n[系统提示：用户上传了图片 {image_path}，请优先考虑使用视觉工具分析]"
             context['image_path'] = image_path
+
+            # v0.9.5: 检测人脸注册意图 - 用户上传图片说"这是XXX"
+            register_patterns = [
+                '这是我', '记住我', '记住我的样子', '认识我',
+                '这是我爸', '这是我妈', '这是我老婆', '这是我老公',
+                '这是我儿子', '这是我女儿', '这是我孩子',
+                '这是', '他叫', '她叫', '认识一下'
+            ]
+            prompt_lower = prompt.lower() if prompt else ""
+            if any(p in prompt_lower for p in register_patterns):
+                # 提取人名
+                import re
+                person_name = None
+                # 尝试匹配 "这是XXX" 或 "他/她叫XXX"
+                match = re.search(r'这是(.{1,10}?)(?:$|[，。,.])', prompt)
+                if match:
+                    person_name = match.group(1).strip()
+                if not person_name:
+                    match = re.search(r'[他她]叫(.{1,10}?)(?:$|[，。,.])', prompt)
+                    if match:
+                        person_name = match.group(1).strip()
+                # 处理 "这是我" -> "主人"
+                if person_name == '我':
+                    person_name = '主人'
+                # 处理 "记住我" / "记住我的样子" -> "主人"
+                if not person_name and ('记住我' in prompt_lower or '认识我' in prompt_lower):
+                    person_name = '主人'
+                # 处理家庭关系词
+                family_map = {
+                    '我爸': '爸爸', '我妈': '妈妈', '我老婆': '老婆',
+                    '我老公': '老公', '我儿子': '儿子', '我女儿': '女儿',
+                    '我孩子': '孩子'
+                }
+                for key, val in family_map.items():
+                    if key in prompt_lower:
+                        person_name = val
+                        break
+
+                if person_name:
+                    logger.info(f"👤 检测到人脸注册意图: person_name={person_name}")
+                    # 直接调用 register_face 工具
+                    try:
+                        from tools import register_face_tool
+                        import asyncio
+                        result = asyncio.get_event_loop().run_until_complete(
+                            register_face_tool.execute(
+                                image_path=image_path,
+                                person_name=person_name
+                            )
+                        )
+                        if result.get('success'):
+                            precomputed_reply = f"好的，我已经记住了{person_name}的样子！下次看到照片我就能认出来了。"
+                            skip_tool_check = True
+                            tool_result = result
+                        else:
+                            error = result.get('error', '未知错误')
+                            precomputed_reply = f"抱歉，记住{person_name}的样子失败了：{error}"
+                            skip_tool_check = True
+                            tool_result = result
+                    except Exception as e:
+                        logger.error(f"人脸注册失败: {e}", exc_info=True)
 
         # v0.9.3: 直答规则（如儿子/女儿小名）优先，命中则跳过工具/意图分析
         try:

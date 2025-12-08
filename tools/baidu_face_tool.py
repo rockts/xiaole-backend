@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class BaiduFaceClient:
     """百度人脸识别 API 客户端"""
-    
+
     TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
     DETECT_URL = "https://aip.baidubce.com/rest/2.0/face/v3/detect"
     SEARCH_URL = "https://aip.baidubce.com/rest/2.0/face/v3/search"
@@ -23,7 +23,7 @@ class BaiduFaceClient:
     DELETE_USER_URL = "https://aip.baidubce.com/rest/2.0/face/v3/faceset/user/delete"
     GET_USER_LIST_URL = "https://aip.baidubce.com/rest/2.0/face/v3/faceset/group/getusers"
     GROUP_ADD_URL = "https://aip.baidubce.com/rest/2.0/face/v3/faceset/group/add"
-    
+
     def __init__(self):
         self.app_id = os.getenv("BAIDU_FACE_APP_ID")
         self.api_key = os.getenv("BAIDU_FACE_API_KEY")
@@ -31,21 +31,21 @@ class BaiduFaceClient:
         self._access_token = None
         self._token_expires_at = 0
         self.group_id = "xiaole_faces"  # 人脸库分组ID
-        
+
     def _is_configured(self) -> bool:
         """检查是否配置了百度人脸识别 API"""
         return all([self.app_id, self.api_key, self.secret_key])
-    
+
     def _get_access_token(self) -> Optional[str]:
         """获取百度 API access_token"""
         if not self._is_configured():
             logger.warning("百度人脸识别 API 未配置")
             return None
-            
+
         # 检查 token 是否过期
         if self._access_token and time.time() < self._token_expires_at:
             return self._access_token
-            
+
         try:
             params = {
                 "grant_type": "client_credentials",
@@ -54,7 +54,7 @@ class BaiduFaceClient:
             }
             response = requests.post(self.TOKEN_URL, params=params, timeout=10)
             result = response.json()
-            
+
             if "access_token" in result:
                 self._access_token = result["access_token"]
                 # Token 有效期通常是 30 天，这里设置 29 天后过期
@@ -67,7 +67,7 @@ class BaiduFaceClient:
         except Exception as e:
             logger.error("获取 access_token 异常: %s", e)
             return None
-    
+
     def _image_to_base64(self, image_path: str) -> Optional[str]:
         """将图片转为 base64"""
         try:
@@ -76,20 +76,20 @@ class BaiduFaceClient:
         except Exception as e:
             logger.error("读取图片失败: %s", e)
             return None
-    
+
     def ensure_group_exists(self) -> bool:
         """确保人脸库分组存在"""
         token = self._get_access_token()
         if not token:
             return False
-            
+
         try:
             params = {"access_token": token}
             data = {"group_id": self.group_id}
             response = requests.post(
-                self.GROUP_ADD_URL, 
-                params=params, 
-                data=data, 
+                self.GROUP_ADD_URL,
+                params=params,
+                data=data,
                 timeout=10
             )
             result = response.json()
@@ -101,7 +101,7 @@ class BaiduFaceClient:
         except Exception as e:
             logger.error("创建人脸库分组异常: %s", e)
             return False
-    
+
     def detect_faces(self, image_path: str) -> Dict[str, Any]:
         """
         检测图片中的人脸
@@ -109,15 +109,15 @@ class BaiduFaceClient:
         """
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         token = self._get_access_token()
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
-            
+
         image_base64 = self._image_to_base64(image_path)
         if not image_base64:
             return {"success": False, "error": f"无法读取图片: {image_path}"}
-            
+
         try:
             params = {"access_token": token}
             data = {
@@ -126,15 +126,15 @@ class BaiduFaceClient:
                 "face_field": "age,beauty,expression,face_shape,gender,glasses,emotion",
                 "max_face_num": 10
             }
-            
+
             response = requests.post(
-                self.DETECT_URL, 
-                params=params, 
-                data=data, 
+                self.DETECT_URL,
+                params=params,
+                data=data,
                 timeout=30
             )
             result = response.json()
-            
+
             if result.get("error_code") == 0:
                 face_list = result.get("result", {}).get("face_list", [])
                 return {
@@ -147,18 +147,18 @@ class BaiduFaceClient:
                 return {"success": True, "face_count": 0, "faces": []}
             else:
                 return {
-                    "success": False, 
+                    "success": False,
                     "error": f"百度 API 错误: {result.get('error_msg', '未知错误')}"
                 }
-                
+
         except Exception as e:
             logger.error("人脸检测异常: %s", e)
             return {"success": False, "error": str(e)}
-    
+
     def register_face(
-        self, 
-        image_path: str, 
-        person_name: str, 
+        self,
+        image_path: str,
+        person_name: str,
         user_id: str = None
     ) -> Dict[str, Any]:
         """
@@ -168,23 +168,23 @@ class BaiduFaceClient:
         """
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         # 确保分组存在
         if not self.ensure_group_exists():
             return {"success": False, "error": "创建人脸库分组失败"}
-            
+
         token = self._get_access_token()
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
-            
+
         image_base64 = self._image_to_base64(image_path)
         if not image_base64:
             return {"success": False, "error": f"无法读取图片: {image_path}"}
-            
+
         # 使用 person_name 作为 user_id（去除空格和特殊字符）
         if not user_id:
             user_id = person_name.replace(" ", "_").replace("-", "_")
-            
+
         try:
             params = {"access_token": token}
             data = {
@@ -197,15 +197,15 @@ class BaiduFaceClient:
                 "liveness_control": "NONE",
                 "action_type": "REPLACE"  # 如果用户已存在则替换
             }
-            
+
             response = requests.post(
-                self.ADD_USER_URL, 
-                params=params, 
-                data=data, 
+                self.ADD_USER_URL,
+                params=params,
+                data=data,
                 timeout=30
             )
             result = response.json()
-            
+
             if result.get("error_code") == 0:
                 logger.info("✅ 人脸注册成功: %s", person_name)
                 return {
@@ -221,14 +221,14 @@ class BaiduFaceClient:
                     "success": False,
                     "error": f"注册失败: {result.get('error_msg', '未知错误')}"
                 }
-                
+
         except Exception as e:
             logger.error("人脸注册异常: %s", e)
             return {"success": False, "error": str(e)}
-    
+
     def search_face(
-        self, 
-        image_path: str, 
+        self,
+        image_path: str,
         face_token: str = None
     ) -> Dict[str, Any]:
         """
@@ -237,15 +237,15 @@ class BaiduFaceClient:
         """
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         token = self._get_access_token()
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
-            
+
         image_base64 = self._image_to_base64(image_path)
         if not image_base64:
             return {"success": False, "error": f"无法读取图片: {image_path}"}
-            
+
         try:
             params = {"access_token": token}
             data = {
@@ -256,15 +256,15 @@ class BaiduFaceClient:
                 "liveness_control": "NONE",
                 "max_user_num": 3  # 返回最多3个匹配结果
             }
-            
+
             response = requests.post(
-                self.SEARCH_URL, 
-                params=params, 
-                data=data, 
+                self.SEARCH_URL,
+                params=params,
+                data=data,
                 timeout=30
             )
             result = response.json()
-            
+
             if result.get("error_code") == 0:
                 user_list = result.get("result", {}).get("user_list", [])
                 if user_list:
@@ -272,19 +272,19 @@ class BaiduFaceClient:
                     score = best_match.get("score", 0)
                     user_id = best_match.get("user_id", "")
                     user_info = best_match.get("user_info", "{}")
-                    
+
                     try:
                         info = json.loads(user_info) if user_info else {}
                         person_name = info.get("name", user_id)
                     except:
                         person_name = user_id
-                    
+
                     # 百度返回的 score 是 0-100，转换为 0-1 的置信度
                     confidence = score / 100.0
-                    
+
                     # 阈值判断（score >= 80 认为匹配）
                     matched = score >= 80
-                    
+
                     return {
                         "success": True,
                         "matched": matched,
@@ -330,13 +330,13 @@ class BaiduFaceClient:
                     "success": False,
                     "error": f"搜索失败: {result.get('error_msg', '未知错误')}"
                 }
-                
+
         except Exception as e:
             logger.error("人脸搜索异常: %s", e)
             return {"success": False, "error": str(e)}
-    
+
     def recognize_faces(
-        self, 
+        self,
         image_path: str
     ) -> Dict[str, Any]:
         """
@@ -345,12 +345,12 @@ class BaiduFaceClient:
         """
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         # 先检测人脸
         detect_result = self.detect_faces(image_path)
         if not detect_result.get("success"):
             return detect_result
-            
+
         face_count = detect_result.get("face_count", 0)
         if face_count == 0:
             return {
@@ -359,7 +359,7 @@ class BaiduFaceClient:
                 "face_count": 0,
                 "faces": []
             }
-        
+
         # 搜索匹配
         search_result = self.search_face(image_path)
         if not search_result.get("success"):
@@ -377,11 +377,11 @@ class BaiduFaceClient:
                     for _ in range(face_count)
                 ]
             }
-        
+
         # 构建返回结果
         identified_people = []
         faces_details = []
-        
+
         if search_result.get("matched"):
             person_name = search_result.get("person_name", "未知人物")
             confidence = search_result.get("confidence", 0)
@@ -400,7 +400,7 @@ class BaiduFaceClient:
                 "confidence": search_result.get("confidence", 0),
                 "score": search_result.get("score", 0)
             })
-        
+
         # 如果检测到多张人脸，其他的标记为未知
         for _ in range(1, face_count):
             identified_people.append("未知人物")
@@ -409,23 +409,23 @@ class BaiduFaceClient:
                 "matched": False,
                 "confidence": 0.0
             })
-        
+
         return {
             "success": True,
             "identified_people": identified_people,
             "face_count": face_count,
             "faces": faces_details
         }
-    
+
     def get_registered_users(self) -> Dict[str, Any]:
         """获取已注册的用户列表"""
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         token = self._get_access_token()
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
-            
+
         try:
             params = {"access_token": token}
             data = {
@@ -433,7 +433,7 @@ class BaiduFaceClient:
                 "start": 0,
                 "length": 100
             }
-            
+
             response = requests.post(
                 self.GET_USER_LIST_URL,
                 params=params,
@@ -441,7 +441,7 @@ class BaiduFaceClient:
                 timeout=10
             )
             result = response.json()
-            
+
             if result.get("error_code") == 0:
                 user_list = result.get("result", {}).get("user_id_list", [])
                 return {
@@ -457,27 +457,27 @@ class BaiduFaceClient:
                     "success": False,
                     "error": f"获取用户列表失败: {result.get('error_msg')}"
                 }
-                
+
         except Exception as e:
             logger.error("获取用户列表异常: %s", e)
             return {"success": False, "error": str(e)}
-    
+
     def delete_user(self, user_id: str) -> Dict[str, Any]:
         """删除用户"""
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
-            
+
         token = self._get_access_token()
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
-            
+
         try:
             params = {"access_token": token}
             data = {
                 "group_id": self.group_id,
                 "user_id": user_id
             }
-            
+
             response = requests.post(
                 self.DELETE_USER_URL,
                 params=params,
@@ -485,7 +485,7 @@ class BaiduFaceClient:
                 timeout=10
             )
             result = response.json()
-            
+
             if result.get("error_code") == 0:
                 return {"success": True, "result": f"已删除用户 {user_id}"}
             else:
@@ -493,7 +493,7 @@ class BaiduFaceClient:
                     "success": False,
                     "error": f"删除失败: {result.get('error_msg')}"
                 }
-                
+
         except Exception as e:
             logger.error("删除用户异常: %s", e)
             return {"success": False, "error": str(e)}

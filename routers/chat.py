@@ -163,19 +163,11 @@ def chat(
 依此类推。不要省略任何信息。'''
             else:
                 ocr_prompt = (
-                    '请详细描述这张图片的内容，包括：\n'
-                    '1. 主体物品或场景是什么\n'
-                    '2. 图片中的文字信息（如有），如看到片段"ckin/ickin"等，可推测完整品牌名\n'
-                    '3. 颜色、品牌、标识等细节\n'
-                    '4. 其他值得注意的特征\n\n'
-                    '如能识别品牌请直接说明。\n\n'
-                    '【⚠️ 重要：希腊字母和数学符号输出规范】\n'
-                    '当图片中出现希腊字母或数学变量时，请直接使用 Unicode 字符输出：\n'
-                    '- 希腊字母请直接写：α、β、γ、δ、θ、λ、μ、π、σ、φ、ω 等\n'
-                    '- 英文变量请直接写：a、b、c、x、y、z 等\n'
-                    '- 禁止使用任何 LaTeX 格式（如 $\\alpha$、\\beta 等）\n'
-                    '- 禁止混合格式（如 \\alpha$、$a 等不完整写法）\n'
-                    '示例：角度 α、β、γ，边长 a、b、c'
+                    '请用自然口语描述这张图片，就像和朋友聊天一样。\n'
+                    '重点说说：图里有什么、是什么场景、有什么特别的地方。\n'
+                    '如果有文字或品牌标识也提一下。\n'
+                    '不要列清单，不要分点，直接说就好。简洁但有趣。\n\n'
+                    '【希腊字母直接用 Unicode：α、β、γ 等，不要用 LaTeX】'
                 )
 
             # 添加超时保护，避免图片识别卡住导致请求超时
@@ -279,38 +271,23 @@ def chat(
                 logger.info(
                     f"🔧 修复前后长度: {original_len} -> {len(vision_description)}, 是否改变: {original_len != len(vision_description)}")
 
+                # 简洁的系统提示，避免格式化回复
                 safety_instruction = (
-                    "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
-                    "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"
-                    "当用户提问'这是什么/这是谁/这张图是什么'等时，必须直接描述图像主体、文字和关键细节。\n"
-                    "【⚠️ 重要：数学公式格式保护】\n"
-                    "如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$ 等），"
-                    "必须严格保持原始格式，绝对不要拆分、修改或转义这些符号。\n"
-                    "正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n"
-                    "错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n"
-                    "请确保所有数学符号和公式保持完整，直接使用原始格式输出。"
+                    "[系统提示：基于图片识别结果回答，保持数学符号完整如 $\\alpha$]"
                 )
 
                 if prompt:
                     combined_prompt = (
+                        f"我看了这张图片，识别到：{vision_description}\n\n"
+                        f"用户问：{prompt}\n\n"
                         f"{safety_instruction}\n"
-                        f"<vision_result>\n"
-                        f"我通过视觉能力识别到的图片内容：\n"
-                        f"{vision_description}\n"
-                        f"</vision_result>\n\n"
-                        f"用户问题：{prompt}\n\n"
-                        f"请基于我识别到的图片内容回答用户的问题。"
-                        f"如果识别到品牌相关的文字片段（如'ckin'、'kin'等），请结合常见品牌推理出完整品牌名。"
-                        f"直接回答用户的实际问题，不要说'这不是XXX'。"
+                        f"请用自然口语回答，像朋友聊天一样，不要列清单或分点。"
                     )
                 else:
                     combined_prompt = (
+                        f"我看了这张图片，识别到：{vision_description}\n\n"
                         f"{safety_instruction}\n"
-                        f"<vision_result>\n"
-                        f"我通过视觉能力识别到的图片内容：\n"
-                        f"{vision_description}\n"
-                        f"</vision_result>\n\n"
-                        f"请分析并解释这张图片的内容。"
+                        f"请用自然口语聊聊这张图，像朋友分享照片一样，不要列清单或分点。"
                     )
 
                 should_memorize = memorize
@@ -559,29 +536,23 @@ def chat_stream(
                         logger.info(
                             f"🔧 [流式] 修复前后长度: {original_len} -> {len(desc)}")
 
+                        # 简洁的系统提示，避免格式化回复
                         safety_instruction = (
-                            "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
-                            "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"
-                            "当用户提问'这是什么/这是谁/这张图是什么'等时，必须直接描述图像主体、文字和关键细节。\n"
-                            "【⚠️ 重要：数学公式格式保护】\n"
-                            "如果 <vision_result> 中包含数学公式、LaTeX 符号（如 $\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$ 等），"
-                            "必须严格保持原始格式，绝对不要拆分、修改或转义这些符号。\n"
-                            "正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n"
-                            "错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n"
-                            "请确保所有数学符号和公式保持完整，直接使用原始格式输出。"
+                            "[系统提示：基于图片识别结果回答，保持数学符号完整]"
                         )
 
                         if prompt:
                             combined_prompt = (
+                                f"我看了这张图片，识别到：{desc}\n\n"
+                                f"用户问：{prompt}\n\n"
                                 f"{safety_instruction}\n"
-                                f"<vision_result>\n{desc}\n</vision_result>\n\n"
-                                f"用户问题：{prompt}\n\n请基于识别结果作答。"
+                                f"请用自然口语回答，像朋友聊天一样。"
                             )
                         else:
                             combined_prompt = (
+                                f"我看了这张图片，识别到：{desc}\n\n"
                                 f"{safety_instruction}\n"
-                                f"<vision_result>\n{desc}\n</vision_result>\n\n"
-                                f"请分析并解释图片内容。"
+                                f"请用自然口语聊聊这张图，像朋友分享照片一样。"
                             )
 
                         try:

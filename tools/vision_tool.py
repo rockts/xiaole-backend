@@ -87,7 +87,7 @@ class VisionTool(Tool):
 
             disable_face = os.getenv(
                 "DISABLE_FACE_RECOGNITION", "false").lower() == "true"
-            
+
             if disable_face:
                 logger.info("⏭️ 人脸识别已禁用（DISABLE_FACE_RECOGNITION=true）")
                 recognition_result = None
@@ -410,7 +410,11 @@ class RegisterFaceTool(Tool):
     def __init__(self):
         super().__init__()
         self.name = "register_face"
-        self.description = "Register a new face for recognition. Use this when the user explicitly says 'This is [Name]' or wants to teach the AI a person's face."
+        self.description = (
+            "注册人脸以便后续识别。当用户说'这是XXX'、'记住这是XXX'、"
+            "'帮我记住他/她'、'这个人叫XXX'等表达时使用此工具。"
+            "Register a face for recognition when user says 'This is [Name]' or wants to remember someone."
+        )
         self.category = "vision"
         self.parameters = [
             ToolParameter(
@@ -482,7 +486,8 @@ class RegisterFaceTool(Tool):
             else:
                 # 回退到本地 face_recognition
                 logger.info("📝 使用本地 face_recognition 注册人脸")
-                result = self.face_manager.register_face(full_path, person_name)
+                result = self.face_manager.register_face(
+                    full_path, person_name)
 
             return result
 

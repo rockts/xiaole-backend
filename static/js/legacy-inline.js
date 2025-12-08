@@ -4876,14 +4876,14 @@ async function handleImageUpload(event) {
             clearTimeout(timeoutId);
 
             console.log('📡 Response status:', response.status);
-            
+
             // 检查 HTTP 状态码
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('❌ HTTP Error:', response.status, errorText);
                 throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
             }
-            
+
             const result = await response.json();
             console.log('📋 Response data:', result);
 
@@ -4907,7 +4907,7 @@ async function handleImageUpload(event) {
         console.error('💥 Upload error:', error);
         console.error('💥 Error name:', error.name);
         console.error('💥 Error message:', error.message);
-        
+
         // 提供更详细的错误信息
         let errorMsg = '网络错误';
         if (error.name === 'AbortError') {

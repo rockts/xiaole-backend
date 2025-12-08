@@ -184,7 +184,7 @@ export async function handleImageUpload(event) {
         }
     } catch (error) {
         console.error('💥 Upload error:', error);
-        
+
         // 提供更详细的错误信息
         let errorMsg = '网络错误';
         if (error.name === 'AbortError') {
