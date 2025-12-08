@@ -210,9 +210,12 @@ def chat(
 
             if vision_result and vision_result.get('success'):
                 vision_description = vision_result.get('description', '')
+                original_desc = vision_description[:200] if len(vision_description) > 200 else vision_description
+                logger.info(f"🔍 修复前的图片描述（前200字）: {original_desc}")
                 
                 # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
                 import re
+                original_len = len(vision_description)
                 # 修复 $\alp$h$a$ -> $\alpha$（注意：实际拆分是连续的字符串）
                 vision_description = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', vision_description)
                 vision_description = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', vision_description)
@@ -223,7 +226,10 @@ def chat(
                 vision_description = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', vision_description)
                 # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                 vision_description = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_description)
-                logger.info(f"🔧 修复后的图片描述长度: {len(vision_description)}")
+                
+                fixed_desc = vision_description[:200] if len(vision_description) > 200 else vision_description
+                logger.info(f"🔧 修复后的图片描述（前200字）: {fixed_desc}")
+                logger.info(f"🔧 修复前后长度: {original_len} -> {len(vision_description)}, 是否改变: {original_len != len(vision_description)}")
 
                 safety_instruction = (
                     "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
@@ -489,9 +495,12 @@ def chat_stream(
 
                     if vision_result.get('success'):
                         desc = vision_result.get('description', '')
+                        original_desc = desc[:200] if len(desc) > 200 else desc
+                        logger.info(f"🔍 [流式] 修复前的图片描述（前200字）: {original_desc}")
                         
                         # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
                         import re
+                        original_len = len(desc)
                         # 修复 $\alp$h$a$ -> $\alpha$（注意：实际拆分是连续的字符串）
                         desc = re.sub(r'\$\\alp\$h\$a\$', r'$\\alpha$', desc)
                         desc = re.sub(r'\$\\alph\$a\$', r'$\\alpha$', desc)
@@ -502,7 +511,10 @@ def chat_stream(
                         desc = re.sub(r'\\gam\$m\$a\$', r'$\\gamma$', desc)
                         # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
                         desc = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', desc)
-                        logger.info(f"🔧 [流式] 修复后的图片描述长度: {len(desc)}")
+                        
+                        fixed_desc = desc[:200] if len(desc) > 200 else desc
+                        logger.info(f"🔧 [流式] 修复后的图片描述（前200字）: {fixed_desc}")
+                        logger.info(f"🔧 [流式] 修复前后长度: {original_len} -> {len(desc)}, 是否改变: {original_len != len(desc)}")
                         
                         safety_instruction = (
                             "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
