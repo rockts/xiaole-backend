@@ -682,18 +682,23 @@ class XiaoLeAgent:
 
                 if person_name:
                     logger.info(f"👤 检测到人脸注册意图: person_name={person_name}")
-                    # 直接调用 register_face 工具
+                    # 直接调用 register_face 工具（同步方式）
                     try:
-                        from tools import register_face_tool
-                        import asyncio
-                        result = asyncio.get_event_loop().run_until_complete(
-                            register_face_tool.execute(
-                                image_path=image_path,
-                                person_name=person_name
+                        from tools.baidu_face_tool import baidu_face_client
+                        if baidu_face_client._is_configured():
+                            result = baidu_face_client.register_face(
+                                image_path, person_name
                             )
-                        )
+                        else:
+                            from modules.face_manager import FaceManager
+                            fm = FaceManager()
+                            result = fm.register_face(image_path, person_name)
+
                         if result.get('success'):
-                            precomputed_reply = f"好的，我已经记住了{person_name}的样子！下次看到照片我就能认出来了。"
+                            precomputed_reply = (
+                                f"好的，我已经记住了{person_name}的样子！"
+                                f"下次看到照片我就能认出来了。"
+                            )
                             skip_tool_check = True
                             tool_result = result
                         else:
