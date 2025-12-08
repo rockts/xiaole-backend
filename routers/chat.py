@@ -218,17 +218,18 @@ def chat(
                 original_len = len(vision_description)
                 # 修复 $\alp$h$a$ -> $\alpha$（注意：\a 在字符串中是转义字符，需要匹配 \x07）
                 # 同时匹配字面的 \a 和转义后的 \x07
-                vision_description = re.sub(r'\$\\alp\$h\$a\$', r'$\alpha$', vision_description)
-                vision_description = re.sub(r'\$\x07lp\$h\$a\$', r'$\alpha$', vision_description)  # 转义字符版本
-                vision_description = re.sub(r'\$\\alph\$a\$', r'$\alpha$', vision_description)
+                # 注意：替换字符串中的 $ 需要转义为 \$
+                vision_description = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', vision_description)
+                vision_description = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', vision_description)  # 转义字符版本
+                vision_description = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', vision_description)
                 # 修复 $\be$t$a$ -> $\beta$（注意：\b 在字符串中是转义字符，需要匹配 \x08）
-                vision_description = re.sub(r'\$\\be\$t\$a\$', r'$\beta$', vision_description)
-                vision_description = re.sub(r'\$\x08e\$t\$a\$', r'$\beta$', vision_description)  # 转义字符版本
+                vision_description = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', vision_description)
+                vision_description = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', vision_description)  # 转义字符版本
                 # 修复 $\gam$m$a$ -> $\gamma$
-                vision_description = re.sub(r'\$\\gam\$m\$a\$', r'$\gamma$', vision_description)
-                vision_description = re.sub(r'\\gam\$m\$a\$', r'$\gamma$', vision_description)
+                vision_description = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', vision_description)
+                vision_description = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', vision_description)
                 # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                vision_description = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', vision_description)
+                vision_description = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', vision_description)
                 
                 fixed_desc = vision_description[:200] if len(vision_description) > 200 else vision_description
                 logger.info(f"🔧 修复后的图片描述（前200字）: {fixed_desc}")
