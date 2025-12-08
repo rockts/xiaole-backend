@@ -809,6 +809,9 @@ class XiaoLeAgent:
                     # 检查是否是"这是什么"类提问
                     user_q = original_user_prompt or ""
                     if any(p in user_q for p in ["这是什么", "这张图", "这个是什么"]):
+                        # 记录返回的 vision_desc 内容（前300字），用于调试 LaTeX 格式问题
+                        preview = vision_desc[:300] if len(vision_desc) > 300 else vision_desc
+                        logger.info(f"🔍 [Agent] 直接返回的 vision_desc（前300字）: {preview}")
                         reply = f"根据图片识别:\n\n{vision_desc}"
                         logger.info("✅ 使用vision直接回复,跳过LLM")
                     else:
