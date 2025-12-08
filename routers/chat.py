@@ -7,6 +7,60 @@ from agent import XiaoLeAgent
 from modules.proactive_qa import ProactiveQA
 from auth import get_current_user
 from logger import logger
+import re
+
+
+def fix_latex_formula(text):
+    """统一数学符号格式为 Unicode 字符
+
+    策略：将所有 LaTeX 格式转换为 Unicode 希腊字母，保持纯文本显示
+    处理情况:
+    - $\\alpha$ → α (完整 LaTeX)
+    - \\alpha$ → α (缺少开头 $)
+    - $\\alpha → α (缺少结尾 $)
+    - \\alpha → α (裸 LaTeX 命令)
+    - 被拆分的格式: $\\alp$h$a$ → α
+    """
+    # LaTeX 命令 → Unicode 映射
+    latex_to_unicode = {
+        'alpha': 'α', 'beta': 'β', 'gamma': 'γ',
+        'delta': 'δ', 'epsilon': 'ε', 'theta': 'θ',
+        'lambda': 'λ', 'mu': 'μ', 'pi': 'π',
+        'sigma': 'σ', 'phi': 'φ', 'omega': 'ω',
+    }
+
+    # 1. 修复被拆分的格式 (先处理，避免干扰后续替换)
+    text = text.replace('$\\alp$h$a$', 'α')
+    text = text.replace('$\x07lp$h$a$', 'α')
+    text = text.replace('$\\alph$a$', 'α')
+    text = text.replace('$\\be$t$a$', 'β')
+    text = text.replace('$\x08e$t$a$', 'β')
+    text = text.replace('$\\gam$m$a$', 'γ')
+    text = text.replace('\\gam$m$a$', 'γ')
+
+    # 2. 修复转义字符问题 (\a → \x07, \b → \x08)
+    text = text.replace('$\x07lpha$', 'α')
+    text = text.replace('$\x08eta$', 'β')
+    text = text.replace('\x07lpha', 'α')
+    text = text.replace('\x08eta', 'β')
+
+    # 3. 将各种 LaTeX 格式统一转换为 Unicode
+    for cmd, char in latex_to_unicode.items():
+        # $\alpha$ → α (完整格式)
+        text = text.replace(f'$\\{cmd}$', char)
+        # \alpha$ → α (缺少开头 $)
+        text = text.replace(f'\\{cmd}$', char)
+        # $\alpha → α (缺少结尾 $，后面跟空格或中文)
+        text = re.sub(rf'\$\\{cmd}(?=[\s\u4e00-\u9fff、，。：；]|$)', char, text)
+        # \alpha → α (裸命令，后面跟空格或中文)
+        text = re.sub(
+            rf'(?<![\\$])\\{cmd}(?=[\s\u4e00-\u9fff、，。：；]|$)', char, text)
+
+    # 4. 清理单独的 $ 符号问题 (如 $a$ 保持不变，因为可能是数学变量)
+    # 但 $$a$ 这种格式需要修复
+    text = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', text)
+
+    return text
 
 
 # 请求体模型（用于接收POST body中的图片路径）
@@ -115,12 +169,13 @@ def chat(
                     '3. 颜色、品牌、标识等细节\n'
                     '4. 其他值得注意的特征\n\n'
                     '如能识别品牌请直接说明。\n\n'
-                    '【⚠️ 重要：数学公式格式保护】\n'
-                    '如果图片中包含数学公式、LaTeX 符号或特殊字符，必须严格保持原始格式，'
-                    '绝对不要拆分、修改或转义这些符号。\n'
-                    '正确示例：$\\alpha$、$\\beta$、$\\gamma$、$a$、$b$、$c$\n'
-                    '错误示例：$\\alph$a$、$\\be$t$a、\\gam$m$a、$$a$、$$b$\n'
-                    '请确保所有数学符号和公式保持完整，不要在任何符号中间插入任何字符。'
+                    '【⚠️ 重要：希腊字母和数学符号输出规范】\n'
+                    '当图片中出现希腊字母或数学变量时，请直接使用 Unicode 字符输出：\n'
+                    '- 希腊字母请直接写：α、β、γ、δ、θ、λ、μ、π、σ、φ、ω 等\n'
+                    '- 英文变量请直接写：a、b、c、x、y、z 等\n'
+                    '- 禁止使用任何 LaTeX 格式（如 $\\alpha$、\\beta 等）\n'
+                    '- 禁止混合格式（如 \\alpha$、$a 等不完整写法）\n'
+                    '示例：角度 α、β、γ，边长 a、b、c'
                 )
 
             # 添加超时保护，避免图片识别卡住导致请求超时
@@ -210,30 +265,19 @@ def chat(
 
             if vision_result and vision_result.get('success'):
                 vision_description = vision_result.get('description', '')
-                original_desc = vision_description[:200] if len(vision_description) > 200 else vision_description
+                original_desc = vision_description[:200] if len(
+                    vision_description) > 200 else vision_description
                 logger.info(f"🔍 修复前的图片描述（前200字）: {original_desc}")
-                
-                # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
-                import re
+
+                # 修复被拆分的 LaTeX 公式
                 original_len = len(vision_description)
-                # 修复 $\alp$h$a$ -> $\alpha$（注意：\a 在字符串中是转义字符，需要匹配 \x07）
-                # 同时匹配字面的 \a 和转义后的 \x07
-                # 注意：替换字符串中的 $ 需要转义为 \$
-                vision_description = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', vision_description)
-                vision_description = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', vision_description)  # 转义字符版本
-                vision_description = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', vision_description)
-                # 修复 $\be$t$a$ -> $\beta$（注意：\b 在字符串中是转义字符，需要匹配 \x08）
-                vision_description = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', vision_description)
-                vision_description = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', vision_description)  # 转义字符版本
-                # 修复 $\gam$m$a$ -> $\gamma$
-                vision_description = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', vision_description)
-                vision_description = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', vision_description)
-                # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                vision_description = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', vision_description)
-                
-                fixed_desc = vision_description[:200] if len(vision_description) > 200 else vision_description
+                vision_description = fix_latex_formula(vision_description)
+
+                fixed_desc = vision_description[:200] if len(
+                    vision_description) > 200 else vision_description
                 logger.info(f"🔧 修复后的图片描述（前200字）: {fixed_desc}")
-                logger.info(f"🔧 修复前后长度: {original_len} -> {len(vision_description)}, 是否改变: {original_len != len(vision_description)}")
+                logger.info(
+                    f"🔧 修复前后长度: {original_len} -> {len(vision_description)}, 是否改变: {original_len != len(vision_description)}")
 
                 safety_instruction = (
                     "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
@@ -466,7 +510,11 @@ def chat_stream(
                     if prompt and any(kw in prompt for kw in important_kw):
                         ocr_prompt = '这是一张课程表，请识别并按天/节次列出。'
                     else:
-                        ocr_prompt = '请详细描述这张图片的内容（主体/文字/颜色/品牌等）。'
+                        ocr_prompt = (
+                            '请详细描述这张图片的内容（主体/文字/颜色/品牌等）。\n'
+                            '【重要】希腊字母请直接用 Unicode 字符：α、β、γ、δ、θ 等，'
+                            '禁止使用 LaTeX 格式如 $\\alpha$ 或不完整格式如 \\alpha$。'
+                        )
 
                     # 使用线程池执行耗时操作，同时发送心跳包
                     import concurrent.futures
@@ -501,28 +549,16 @@ def chat_stream(
                         desc = vision_result.get('description', '')
                         original_desc = desc[:200] if len(desc) > 200 else desc
                         logger.info(f"🔍 [流式] 修复前的图片描述（前200字）: {original_desc}")
-                        
-                        # 修复被拆分的 LaTeX 公式（Qwen API 有时会拆分公式）
-                        import re
+
+                        # 修复被拆分的 LaTeX 公式
                         original_len = len(desc)
-                        # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
-                        # 注意：替换字符串中的 $ 需要转义为 \$
-                        desc = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', desc)
-                        desc = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', desc)  # 转义字符版本
-                        desc = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', desc)
-                        # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
-                        desc = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', desc)
-                        desc = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', desc)  # 转义字符版本
-                        # 修复 $\gam$m$a$ -> $\gamma$
-                        desc = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', desc)
-                        desc = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', desc)
-                        # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                        desc = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', desc)
-                        
+                        desc = fix_latex_formula(desc)
+
                         fixed_desc = desc[:200] if len(desc) > 200 else desc
                         logger.info(f"🔧 [流式] 修复后的图片描述（前200字）: {fixed_desc}")
-                        logger.info(f"🔧 [流式] 修复前后长度: {original_len} -> {len(desc)}, 是否改变: {original_len != len(desc)}")
-                        
+                        logger.info(
+                            f"🔧 [流式] 修复前后长度: {original_len} -> {len(desc)}")
+
                         safety_instruction = (
                             "【视觉回答要求】请严格基于 <vision_result> 中的内容作答。"
                             "禁止输出与图片无关的回答，尤其禁止回复当前时间、日期或泛泛的寒暄。"

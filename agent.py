@@ -25,6 +25,60 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
 
+def fix_latex_formula(text):
+    """统一数学符号格式为 Unicode 字符
+
+    策略：将所有 LaTeX 格式转换为 Unicode 希腊字母，保持纯文本显示
+    处理情况:
+    - $\\alpha$ → α (完整 LaTeX)
+    - \\alpha$ → α (缺少开头 $)
+    - $\\alpha → α (缺少结尾 $)
+    - \\alpha → α (裸 LaTeX 命令)
+    - 被拆分的格式: $\\alp$h$a$ → α
+    """
+    # LaTeX 命令 → Unicode 映射
+    latex_to_unicode = {
+        'alpha': 'α', 'beta': 'β', 'gamma': 'γ',
+        'delta': 'δ', 'epsilon': 'ε', 'theta': 'θ',
+        'lambda': 'λ', 'mu': 'μ', 'pi': 'π',
+        'sigma': 'σ', 'phi': 'φ', 'omega': 'ω',
+    }
+
+    # 1. 修复被拆分的格式 (先处理，避免干扰后续替换)
+    text = text.replace('$\\alp$h$a$', 'α')
+    text = text.replace('$\x07lp$h$a$', 'α')
+    text = text.replace('$\\alph$a$', 'α')
+    text = text.replace('$\\be$t$a$', 'β')
+    text = text.replace('$\x08e$t$a$', 'β')
+    text = text.replace('$\\gam$m$a$', 'γ')
+    text = text.replace('\\gam$m$a$', 'γ')
+
+    # 2. 修复转义字符问题 (\a → \x07, \b → \x08)
+    text = text.replace('$\x07lpha$', 'α')
+    text = text.replace('$\x08eta$', 'β')
+    text = text.replace('\x07lpha', 'α')
+    text = text.replace('\x08eta', 'β')
+
+    # 3. 将各种 LaTeX 格式统一转换为 Unicode
+    for cmd, char in latex_to_unicode.items():
+        # $\alpha$ → α (完整格式)
+        text = text.replace(f'$\\{cmd}$', char)
+        # \alpha$ → α (缺少开头 $)
+        text = text.replace(f'\\{cmd}$', char)
+        # $\alpha → α (缺少结尾 $，后面跟空格或中文)
+        text = re.sub(
+            rf'\$\\{cmd}(?=[\s\u4e00-\u9fff、，。：；]|$)', char, text)
+        # \alpha → α (裸命令，后面跟空格或中文)
+        text = re.sub(
+            rf'(?<![\\$])\\{cmd}(?=[\s\u4e00-\u9fff、，。：；]|$)', char, text)
+
+    # 4. 清理单独的 $ 符号问题 (如 $a$ 保持不变，因为可能是数学变量)
+    # 但 $$a$ 这种格式需要修复
+    text = re.sub(r'\$\$([a-zA-Z])\$', r'$\1$', text)
+
+    return text
+
+
 class XiaoLeAgent:
     def __init__(self):
         self.memory = MemoryManager()
@@ -789,29 +843,16 @@ class XiaoLeAgent:
                     if vision_desc and "我通过视觉能力识别到的图片内容：" in vision_desc:
                         vision_desc = vision_desc.split(
                             "我通过视觉能力识别到的图片内容：", 1)[-1].strip()
-                    
-                    # 修复被拆分的 LaTeX 公式（确保即使直接返回也修复）
-                    import re
-                    # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
-                    # 注意：替换字符串中的 $ 需要转义为 \$
-                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', vision_desc)
-                    vision_desc = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', vision_desc)  # 转义字符版本
-                    vision_desc = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', vision_desc)
-                    # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
-                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', vision_desc)
-                    vision_desc = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', vision_desc)  # 转义字符版本
-                    # 修复 $\gam$m$a$ -> $\gamma$
-                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', vision_desc)
-                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', vision_desc)
-                    # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                    vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', vision_desc)
-                    
+
+                    # 修复被拆分的 LaTeX 公式
+                    vision_desc = fix_latex_formula(vision_desc)
+
                     # 检查是否是"这是什么"类提问
                     user_q = original_user_prompt or ""
                     if any(p in user_q for p in ["这是什么", "这张图", "这个是什么"]):
-                        # 记录返回的 vision_desc 内容（前300字），用于调试 LaTeX 格式问题
-                        preview = vision_desc[:300] if len(vision_desc) > 300 else vision_desc
-                        logger.info(f"🔍 [Agent] 直接返回的 vision_desc（前300字）: {preview}")
+                        preview = vision_desc[:300] if len(
+                            vision_desc) > 300 else vision_desc
+                        logger.info(f"🔍 [Agent] 直接返回的 vision_desc: {preview}")
                         reply = f"根据图片识别:\n\n{vision_desc}"
                         logger.info("✅ 使用vision直接回复,跳过LLM")
                     else:
@@ -1802,27 +1843,15 @@ class XiaoLeAgent:
                         vision_desc = vision_desc.split(
                             "我通过视觉能力识别到的图片内容：", 1
                         )[-1].strip()
-                    
-                    # 修复被拆分的 LaTeX 公式（确保即使直接返回也修复）
-                    import re
-                    # 修复 $\alp$h$a$ -> $\alpha$（同时支持字面和转义字符）
-                    # 注意：替换字符串中的 $ 需要转义为 \$
-                    vision_desc = re.sub(r'\$\\alp\$h\$a\$', r'\$\\alpha\$', vision_desc)
-                    vision_desc = re.sub(r'\$\x07lp\$h\$a\$', r'\$\\alpha\$', vision_desc)  # 转义字符版本
-                    vision_desc = re.sub(r'\$\\alph\$a\$', r'\$\\alpha\$', vision_desc)
-                    # 修复 $\be$t$a$ -> $\beta$（同时支持字面和转义字符）
-                    vision_desc = re.sub(r'\$\\be\$t\$a\$', r'\$\\beta\$', vision_desc)
-                    vision_desc = re.sub(r'\$\x08e\$t\$a\$', r'\$\\beta\$', vision_desc)  # 转义字符版本
-                    # 修复 $\gam$m$a$ -> $\gamma$
-                    vision_desc = re.sub(r'\$\\gam\$m\$a\$', r'\$\\gamma\$', vision_desc)
-                    vision_desc = re.sub(r'\\gam\$m\$a\$', r'\$\\gamma\$', vision_desc)
-                    # 修复 $$a$、$$b$、$$c$ -> $a$、$b$、$c$
-                    vision_desc = re.sub(r'\$\$([a-zA-Z])\$', r'\$\1\$', vision_desc)
-                    
-                    # 记录返回的 vision_desc 内容（前300字），用于调试 LaTeX 格式问题
-                    preview = vision_desc[:300] if len(vision_desc) > 300 else vision_desc
-                    logger.info(f"🔍 [Agent _think_with_context] 直接返回的 vision_desc（前300字）: {preview}")
-                    
+
+                    # 修复被拆分的 LaTeX 公式
+                    vision_desc = fix_latex_formula(vision_desc)
+
+                    preview = vision_desc[:300] if len(
+                        vision_desc) > 300 else vision_desc
+                    logger.info(
+                        f"🔍 [_think_with_context] vision_desc: {preview}")
+
                     # 提取用户问题
                     user_q_match = prompt.find("用户问题：")
                     if user_q_match != -1:
