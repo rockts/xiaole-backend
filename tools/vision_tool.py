@@ -6,6 +6,7 @@ import json
 from typing import Dict, Any, List, Optional
 from modules.tool_manager import Tool, ToolParameter
 from modules.face_manager import FaceManager
+from tools.baidu_face_tool import baidu_face_client
 from config import UPLOADS_DIR
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ class VisionTool(Tool):
         self.qwen_key = os.getenv("QWEN_API_KEY")
         self.claude_key = os.getenv("CLAUDE_API_KEY")
         self.face_manager = FaceManager()
+        # 百度人脸识别客户端
+        self.baidu_face = baidu_face_client
 
     def _resolve_path(self, image_path: str) -> Optional[str]:
         """Resolve image path relative to backend or project root"""
@@ -76,24 +79,32 @@ class VisionTool(Tool):
             if not full_path:
                 return {"success": False, "error": f"Image file not found: {image_path}"}
 
-            # Step 1: Face Recognition using FaceManager
-            # 重要：即使人脸识别失败，也要继续执行视觉分析
-            # 可通过环境变量 DISABLE_FACE_RECOGNITION=true 禁用人脸识别
+            # Step 1: Face Recognition
+            # 优先使用百度人脸识别 API（云端稳定），回退到本地 face_recognition
+            # 可通过环境变量 DISABLE_FACE_RECOGNITION=true 完全禁用人脸识别
             face_info = ""
             face_details: List[Dict[str, Any]] = []
+
+            disable_face = os.getenv(
+                "DISABLE_FACE_RECOGNITION", "false").lower() == "true"
             
-            # 检查是否禁用人脸识别（解决生产环境 dlib/face_recognition 崩溃问题）
-            disable_face = os.getenv("DISABLE_FACE_RECOGNITION", "false").lower() == "true"
             if disable_face:
                 logger.info("⏭️ 人脸识别已禁用（DISABLE_FACE_RECOGNITION=true）")
                 recognition_result = None
             else:
+                # 优先使用百度人脸识别 API
                 try:
-                    # Use FaceManager to recognize faces
-                    recognition_result = self.face_manager.recognize_faces(
-                        full_path)
+                    if self.baidu_face._is_configured():
+                        logger.info("🔍 使用百度人脸识别 API")
+                        recognition_result = self.baidu_face.recognize_faces(
+                            full_path)
+                    else:
+                        # 回退到本地 face_recognition
+                        logger.info("🔍 使用本地 face_recognition")
+                        recognition_result = self.face_manager.recognize_faces(
+                            full_path)
                 except Exception as face_err:
-                    logger.error("❌ 人脸识别崩溃: %s", face_err, exc_info=True)
+                    logger.error("❌ 人脸识别失败: %s", face_err, exc_info=True)
                     recognition_result = None
 
             # 处理人脸识别结果
@@ -416,6 +427,8 @@ class RegisterFaceTool(Tool):
             )
         ]
         self.face_manager = FaceManager()
+        # 百度人脸识别客户端
+        self.baidu_face = baidu_face_client
 
     def _resolve_path(self, image_path: str) -> Optional[str]:
         """Resolve image path relative to backend or project root"""
@@ -462,8 +475,14 @@ class RegisterFaceTool(Tool):
             logger.info(
                 f"👤 Registering face for '{person_name}' from {full_path}")
 
-            # Use FaceManager to register face
-            result = self.face_manager.register_face(full_path, person_name)
+            # 优先使用百度人脸识别 API
+            if self.baidu_face._is_configured():
+                logger.info("📝 使用百度人脸识别 API 注册人脸")
+                result = self.baidu_face.register_face(full_path, person_name)
+            else:
+                # 回退到本地 face_recognition
+                logger.info("📝 使用本地 face_recognition 注册人脸")
+                result = self.face_manager.register_face(full_path, person_name)
 
             return result
 
