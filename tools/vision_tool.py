@@ -145,11 +145,9 @@ class VisionTool(Tool):
                         )
                     else:
                         face_info = f"【人脸识别结果】图中发现了以下熟人：{', '.join(known_people)}。\n"
-                elif face_count > 0:
-                    face_info = f"【人脸识别结果】图中发现了 {face_count} 个人，但未识别出具体身份。\n"
                 else:
-                    # No faces found
-                    pass
+                    # 检测到人脸但没有匹配到已注册的人 - 不显示，让 Qwen 自然描述
+                    face_info = ""
             elif recognition_result:
                 error_msg = recognition_result.get('error', '未知错误')
                 logger.warning("Face recognition warning: %s", error_msg)
