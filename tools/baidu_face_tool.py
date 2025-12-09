@@ -131,7 +131,7 @@ class BaiduFaceClient:
                 self.DETECT_URL,
                 params=params,
                 data=data,
-                timeout=30
+                timeout=15
             )
             result = response.json()
 
@@ -261,7 +261,7 @@ class BaiduFaceClient:
                 self.SEARCH_URL,
                 params=params,
                 data=data,
-                timeout=30
+                timeout=15
             )
             result = response.json()
 

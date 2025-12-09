@@ -253,7 +253,7 @@ class VisionTool(Tool):
             }
 
             response = requests.post(
-                url, headers=headers, json=payload, timeout=60)
+                url, headers=headers, json=payload, timeout=45)
 
             if response.status_code == 200:
                 result = response.json()

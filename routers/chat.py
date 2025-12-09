@@ -226,7 +226,8 @@ def chat(
             analyze_thread.start()
 
             # 等待完成或超时
-            completed = vision_completed.wait(timeout=30)  # 30秒超时
+            # 增加超时时间：百度人脸识别(15s) + Qwen-VL(45s) = 60s，留10s缓冲
+            completed = vision_completed.wait(timeout=70)
 
             elapsed = time.time() - start_time
 
