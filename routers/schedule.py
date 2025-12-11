@@ -15,7 +15,6 @@ async def get_schedule(user_id: str = "default_user"):
     session = SessionLocal()
     try:
         memories = session.query(Memory).filter(
-            Memory.user_id == user_id,
             Memory.tag.like('image:%'),
             or_(
                 Memory.content.like('%周一：晨读%'),
@@ -26,7 +25,6 @@ async def get_schedule(user_id: str = "default_user"):
 
         if not memories:
             memories = session.query(Memory).filter(
-                Memory.user_id == user_id,
                 Memory.tag == 'schedule'
             ).order_by(Memory.created_at.desc()).limit(1).all()
 
@@ -117,7 +115,6 @@ async def save_schedule(request: dict, user_id: str = "default_user"):
 
         # 删除旧的课程表记忆
         old_memories = session.query(Memory).filter(
-            Memory.user_id == user_id,
             Memory.tag == 'schedule'
         ).all()
 
@@ -127,8 +124,7 @@ async def save_schedule(request: dict, user_id: str = "default_user"):
         # 创建新的课程表记忆
         new_memory = Memory(
             content=f"用户课程表：\n{content}",
-            tag="schedule",
-            user_id=user_id
+            tag="schedule"
         )
         session.add(new_memory)
         session.commit()
