@@ -130,6 +130,18 @@ class XiaoLeAgent:
         self.model = self._get_model()
         self.client = self._init_client()
 
+        # v0.9.6: HTTP 连接池（复用连接，减少握手开销）
+        import requests
+        self._http_session = requests.Session()
+        # 配置连接池
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,  # 连接池大小
+            pool_maxsize=20,      # 最大连接数
+            max_retries=3         # 重试次数
+        )
+        self._http_session.mount('https://', adapter)
+        self._http_session.mount('http://', adapter)
+
     def _register_tools(self):
         """注册所有可用工具"""
         try:
@@ -221,6 +233,17 @@ class XiaoLeAgent:
         """调用 AI API 进行思考"""
         # 如果没有配置 API，返回占位响应
         if not self.client:
+            return
+
+        # v0.9.6: 简单问候和日常对话直接跳过
+        simple_patterns = [
+            '你好', '嗨', '哈喽', 'hello', 'hi', '早上好', '下午好',
+            '晚上好', '早安', '晚安', '在吗', '你在吗', '谢谢', '好的',
+            '知道了', '嗯', '好', '行', 'ok', '再见', '拜拜', '怎么了',
+        ]
+        msg_clean = (user_message or '').strip().lower()
+        if msg_clean in simple_patterns or len(msg_clean) <= 4:
+            logger.info(f'⚡ 简单消息跳过信息提取: {user_message}')
             return f"（占位模式）你说的是：{prompt}"
 
         try:
@@ -297,7 +320,7 @@ class XiaoLeAgent:
     @handle_api_errors
     @log_execution
     def _call_deepseek(self, system_prompt, user_prompt, max_tokens=512):
-        """调用 DeepSeek API"""
+        """调用 DeepSeek API（使用连接池）"""
         logger.info(f"调用 DeepSeek API - Prompt长度: {len(user_prompt)}")
 
         headers = {
@@ -316,17 +339,20 @@ class XiaoLeAgent:
             "stream": False
         }
 
-        response = requests.post(
+        # v0.9.6: 使用连接池
+        response = self._http_session.post(
             self.deepseek_url,
             headers=headers,
             json=data,
-            timeout=60  # 增加超时时间以处理复杂问题
+            timeout=60
         )
 
         # 检查是否需要切换到备用模型
         if response.status_code == 503:
             logger.warning("⚠️ DeepSeek 503，尝试切换到 Qwen 备用模型")
-            return self._call_qwen_fallback(system_prompt, user_prompt, max_tokens)
+            return self._call_qwen_fallback(
+                system_prompt, user_prompt, max_tokens
+            )
 
         response.raise_for_status()
         result = response.json()
@@ -361,7 +387,8 @@ class XiaoLeAgent:
             "stream": False
         }
 
-        response = requests.post(
+        # v0.9.6: 使用连接池
+        response = self._http_session.post(
             self.qwen_url,
             headers=headers,
             json=data,
@@ -373,6 +400,245 @@ class XiaoLeAgent:
         reply = result["choices"][0]["message"]["content"]
         logger.info(f"✅ Qwen 备用模型响应成功 - 回复长度: {len(reply)}")
         return reply
+
+    # v0.9.6: SSE 流式响应方法
+    def chat_stream(self, prompt, session_id=None, user_id="default_user",
+                    response_style="balanced"):
+        """
+        流式对话方法 - 返回生成器，逐 token 输出
+        用于 SSE (Server-Sent Events) 流式响应
+        """
+        import json
+        import time
+        start_time = time.time()
+
+        # 检查缓存问答
+        prompt_clean = (prompt or '').strip()
+        if prompt_clean in self.CACHED_RESPONSES:
+            cached_reply = self.CACHED_RESPONSES[prompt_clean]
+            logger.info(f"⚡ 流式模式命中缓存: {prompt_clean}")
+            # 会话记录
+            if not session_id:
+                session_id = self.conversation.create_session(
+                    user_id=user_id,
+                    title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                )
+            user_msg_id = self.conversation.add_message(
+                session_id, "user", prompt
+            )
+            # 模拟流式输出缓存内容
+            for char in cached_reply:
+                yield f"data: {json.dumps({'content': char}, ensure_ascii=False)}\n\n"
+            # 保存完整回复
+            assistant_msg_id = self.conversation.add_message(
+                session_id, "assistant", cached_reply
+            )
+            yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'user_message_id': user_msg_id, 'assistant_message_id': assistant_msg_id}, ensure_ascii=False)}\n\n"
+            return
+
+        # 创建/获取会话
+        if not session_id:
+            session_id = self.conversation.create_session(
+                user_id=user_id,
+                title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+            )
+
+        # 保存用户消息
+        user_msg_id = self.conversation.add_message(session_id, "user", prompt)
+
+        # 获取历史
+        history = self.conversation.get_history(session_id, limit=5)
+
+        # 构建 system prompt
+        system_prompt = self._build_system_prompt_for_stream(
+            prompt, history, response_style
+        )
+
+        # 构建 messages
+        messages = []
+        for msg in history:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if role in ['user', 'assistant'] and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": prompt})
+
+        # 调用流式 API
+        full_reply = ""
+        try:
+            for chunk in self._call_deepseek_stream(system_prompt, messages, response_style):
+                full_reply += chunk
+                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"流式调用失败: {e}")
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+            return
+
+        # 保存完整回复
+        assistant_msg_id = self.conversation.add_message(
+            session_id, "assistant", full_reply
+        )
+
+        # 后台任务
+        import threading
+
+        def background_tasks():
+            try:
+                self._extract_and_remember(prompt)
+                self.pattern_learner.learn_from_message(
+                    user_id, prompt, session_id)
+                self.behavior_analyzer.record_session_behavior(
+                    user_id, session_id)
+            except Exception as e:
+                logger.warning(f"后台任务失败: {e}")
+
+        bg_thread = threading.Thread(target=background_tasks, daemon=True)
+        bg_thread.start()
+
+        total_time = time.time() - start_time
+        logger.info(f"⏱️ 流式响应完成，总耗时: {total_time:.2f}s")
+
+        yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'user_message_id': user_msg_id, 'assistant_message_id': assistant_msg_id}, ensure_ascii=False)}\n\n"
+
+    def _build_system_prompt_for_stream(self, prompt, history, response_style):
+        """构建流式响应的 system prompt（简化版）"""
+        from datetime import datetime
+        current_datetime = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+        current_weekday = weekdays[datetime.now().weekday()]
+
+        system_prompt = (
+            "你是小乐，一个温暖贴心的AI智能管家。\n"
+            f"当前时间：{current_datetime}（{current_weekday}）\n"
+            "请用简洁友好的语气回复用户。"
+        )
+
+        # 获取响应风格参数
+        style_hints = {
+            'concise': '请简洁回复，不超过50字。',
+            'balanced': '',
+            'detailed': '可以详细一些回答。',
+            'professional': '请用专业的语气回答。'
+        }
+        if response_style in style_hints and style_hints[response_style]:
+            system_prompt += f"\n{style_hints[response_style]}"
+
+        return system_prompt
+
+    def _call_deepseek_stream(self, system_prompt, messages, response_style="balanced"):
+        """
+        v0.9.6: DeepSeek 流式 API 调用
+        返回生成器，逐 chunk 输出
+        """
+        logger.info(f"🌊 调用 DeepSeek 流式 API - 消息数: {len(messages)}")
+
+        llm_params = self._get_llm_parameters(response_style)
+
+        headers = {
+            "Authorization": f"Bearer {self.deepseek_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt}
+            ] + messages,
+            "temperature": llm_params['temperature'],
+            "max_tokens": llm_params['max_tokens'],
+            "stream": True  # 启用流式
+        }
+
+        response = requests.post(
+            self.deepseek_url,
+            headers=headers,
+            json=data,
+            timeout=120,
+            stream=True  # requests 流式
+        )
+
+        # 503 时切换备用模型
+        if response.status_code == 503:
+            logger.warning("⚠️ DeepSeek 503，流式切换到 Qwen")
+            yield from self._call_qwen_stream_fallback(
+                system_prompt, messages, response_style
+            )
+            return
+
+        response.raise_for_status()
+
+        # 解析 SSE 流
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    if data_str == '[DONE]':
+                        break
+                    try:
+                        import json
+                        chunk_data = json.loads(data_str)
+                        delta = chunk_data.get('choices', [{}])[
+                            0].get('delta', {})
+                        content = delta.get('content', '')
+                        if content:
+                            yield content
+                    except Exception as e:
+                        logger.warning(f"解析流式数据失败: {e}")
+
+    def _call_qwen_stream_fallback(self, system_prompt, messages, response_style="balanced"):
+        """
+        Qwen 流式备用
+        """
+        if not self.qwen_key:
+            raise Exception("DeepSeek 不可用，且未配置 Qwen")
+
+        logger.info(f"🔄 切换到 Qwen 流式备用 ({self.qwen_model})")
+
+        llm_params = self._get_llm_parameters(response_style)
+
+        headers = {
+            "Authorization": f"Bearer {self.qwen_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": self.qwen_model,
+            "messages": [
+                {"role": "system", "content": system_prompt}
+            ] + messages,
+            "temperature": llm_params['temperature'],
+            "max_tokens": llm_params['max_tokens'],
+            "stream": True
+        }
+
+        response = requests.post(
+            self.qwen_url,
+            headers=headers,
+            json=data,
+            timeout=120,
+            stream=True
+        )
+
+        response.raise_for_status()
+
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    if data_str == '[DONE]':
+                        break
+                    try:
+                        import json
+                        chunk_data = json.loads(data_str)
+                        delta = chunk_data.get('choices', [{}])[
+                            0].get('delta', {})
+                        content = delta.get('content', '')
+                        if content:
+                            yield content
+                    except Exception as e:
+                        logger.warning(f"Qwen 流式解析失败: {e}")
 
     @retry_with_backoff(
         max_retries=3,
@@ -430,6 +696,17 @@ class XiaoLeAgent:
         """
         if not self.client:
             return  # 占位模式不提取
+
+        # v0.9.6: 简单问候和日常对话直接跳过
+        simple_patterns = [
+            "你好", "嗨", "哈喽", "hello", "hi", "早上好", "下午好",
+            "晚上好", "早安", "晚安", "在吗", "你在吗", "谢谢", "好的",
+            "知道了", "嗯", "好", "行", "ok", "再见", "拜拜", "怎么了",
+        ]
+        msg_clean = (user_message or "").strip().lower()
+        if msg_clean in simple_patterns or len(msg_clean) <= 4:
+            logger.info(f"⚡ 简单消息跳过信息提取: {user_message}")
+            return
 
         # v0.9.4: 对明显的“非事实类”请求跳过提取，避免不必要的LLM调用
         try:
@@ -607,6 +884,19 @@ class XiaoLeAgent:
 
         return thought
 
+    # v0.9.6: 常见问答缓存（秒回）
+    CACHED_RESPONSES = {
+        '你是谁': '我是小乐，你的AI智能管家！我可以帮你查天气、设提醒、记事情、聊天解闷，有什么需要帮忙的吗？😊',
+        '你叫什么': '我叫小乐，是你的AI智能管家～',
+        '你叫什么名字': '我叫小乐，是你的AI智能管家～',
+        '你是什么': '我是小乐AI管家，一个能帮你处理日常事务的智能助手。',
+        '你能做什么': '我能帮你：\n• 查询天气\n• 设置提醒\n• 记住重要信息\n• 搜索资料\n• 日常聊天\n• 识别图片\n有什么需要帮忙的？',
+        '你会什么': '我会很多事情哦：查天气、设提醒、记事情、搜索、看图识物、陪你聊天～ 你想试试哪个？',
+        '你好厉害': '谢谢夸奖！我会继续努力的～ 😊',
+        '你真棒': '谢谢！有你的鼓励我更有动力了～',
+        '你真聪明': '哈哈，谢谢夸奖！不过我还在不断学习中～',
+    }
+
     def chat(self, prompt, session_id=None, user_id="default_user",
              response_style="balanced", image_path=None,
              original_user_prompt=None):
@@ -622,6 +912,28 @@ class XiaoLeAgent:
         # 性能监控
         import time
         start_time = time.time()
+
+        # v0.9.6: 检查缓存的常见问答（秒回）
+        prompt_clean = (prompt or '').strip()
+        if prompt_clean in self.CACHED_RESPONSES and not image_path:
+            cached_reply = self.CACHED_RESPONSES[prompt_clean]
+            logger.info(f"⚡ 命中缓存问答: {prompt_clean} -> 秒回")
+            # 仍需保存会话记录
+            if not session_id:
+                session_id = self.conversation.create_session(
+                    user_id=user_id,
+                    title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                )
+            user_msg_id = self.conversation.add_message(
+                session_id, "user", prompt)
+            assistant_msg_id = self.conversation.add_message(
+                session_id, "assistant", cached_reply)
+            return {
+                "session_id": session_id,
+                "reply": cached_reply,
+                "user_message_id": user_msg_id,
+                "assistant_message_id": assistant_msg_id
+            }
 
         # 如果没有session_id，创建新会话
         logger.info(
@@ -804,37 +1116,55 @@ class XiaoLeAgent:
                 logger.warning("快速直达失败: %s", e)
 
         # 增强的意图识别与工具执行
-        try:
-            tool_calls = self.enhanced_selector.analyze_intent(
-                intent_prompt, context)
-
-            if tool_calls:
-                for tool_call in tool_calls:
-                    result = self.enhanced_selector.execute_with_retry(
-                        tool_call, max_retries=2, user_id=user_id, session_id=session_id
-                    )
-                    if result.success:
-                        tool_result = {
-                            'success': True,
-                            'data': result.data,
-                            'tool_name': result.tool_name
-                        }
-                        break
-
-            if not tool_result:
-                tool_result = self._auto_call_tool(
-                    intent_prompt, user_id, session_id)
-        except Exception as e:
-            logger.warning(f"增强工具调用失败: {e}")
+        # v0.9.6: 如果已经有预计算回复或设置了跳过标志，直接跳过工具调用
+        if not skip_tool_check and precomputed_reply is None:
             try:
-                tool_result = self._auto_call_tool(
-                    intent_prompt, user_id, session_id)
-            except Exception as e2:
-                logger.warning(f"旧工具调用也失败: {e2}")
+                tool_calls = self.enhanced_selector.analyze_intent(
+                    intent_prompt, context)
+
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        result = self.enhanced_selector.execute_with_retry(
+                            tool_call, max_retries=2, user_id=user_id, session_id=session_id
+                        )
+                        if result.success:
+                            tool_result = {
+                                'success': True,
+                                'data': result.data,
+                                'tool_name': result.tool_name
+                            }
+                            break
+
+                if not tool_result:
+                    tool_result = self._auto_call_tool(
+                        intent_prompt, user_id, session_id)
+            except Exception as e:
+                logger.warning(f"增强工具调用失败: {e}")
+                try:
+                    tool_result = self._auto_call_tool(
+                        intent_prompt, user_id, session_id)
+                except Exception as e2:
+                    logger.warning(f"旧工具调用也失败: {e2}")
 
         # v0.8.0: 任务识别和执行
         # 如果已经成功执行了工具，且没有明确的任务关键词，则跳过复杂任务识别（避免重复执行）
-        if not task_result and (not tool_result or not tool_result.get('success')):
+        # v0.9.6: 性能优化 - 简单消息跳过复杂任务识别
+        simple_chat_patterns = [
+            '你好', '嗨', '哈喽', '早上好', '下午好', '晚上好', '早安', '晚安',
+            '在吗', '在不在', '你在吗', '你在不在', '在干嘛', '干嘛呢',
+            '谢谢', '好的', '知道了', '明白', '嗯', '好', '行', 'ok', 'OK',
+            '再见', '拜拜', '回头见', '下次聊', '晚安',
+            '怎么了', '咋了', '啥事', '有事吗', '什么事',
+            '你是谁', '你叫什么', '你是什么', '你能做什么', '你会什么',
+        ]
+        is_simple_chat = (
+            len(prompt) <= 10 and any(p in prompt for p in simple_chat_patterns)
+        ) or prompt.strip() in simple_chat_patterns
+
+        if is_simple_chat:
+            logger.info(f"⚡ 简单对话跳过任务识别: {prompt}")
+
+        if not task_result and (not tool_result or not tool_result.get('success')) and not is_simple_chat:
             try:
                 # 识别是否为复杂任务
                 task_check = self.identify_complex_task(prompt, user_id)
@@ -1004,24 +1334,52 @@ class XiaoLeAgent:
             session_id, "assistant", reply
         )
 
-        # 智能提取：让AI判断是否有关键事实需要记住
-        self._extract_and_remember(prompt)
+        # v0.9.6: 将非关键操作移到后台线程，不阻塞响应
+        import threading
 
-        # v0.3.0: 模式学习（从用户消息中学习使用模式）
-        try:
-            self.pattern_learner.learn_from_message(
-                user_id, prompt, session_id
-            )
-        except Exception as e:
-            logger.warning(f"模式学习失败: {e}")
+        def background_tasks():
+            """后台执行的非关键任务"""
+            try:
+                # 智能提取：让AI判断是否有关键事实需要记住
+                self._extract_and_remember(prompt)
+            except Exception as e:
+                logger.warning(f"后台信息提取失败: {e}")
 
-        # v0.3.0: 记录用户行为数据
-        try:
-            self.behavior_analyzer.record_session_behavior(user_id, session_id)
-        except Exception as e:
-            logger.warning(f"行为数据记录失败: {e}")
+            try:
+                # v0.3.0: 模式学习（从用户消息中学习使用模式）
+                self.pattern_learner.learn_from_message(
+                    user_id, prompt, session_id
+                )
+            except Exception as e:
+                logger.warning(f"模式学习失败: {e}")
 
-        # v0.6.0: 主动问答分析（检测是否需要追问）
+            try:
+                # v0.3.0: 记录用户行为数据
+                self.behavior_analyzer.record_session_behavior(
+                    user_id, session_id
+                )
+            except Exception as e:
+                logger.warning(f"行为数据记录失败: {e}")
+
+            try:
+                # v0.6.1: 定期生成对话摘要（每5轮对话）
+                hist = self.conversation.get_history(session_id, limit=1)
+                if hist:
+                    msg_count = len(
+                        self.conversation.get_history(session_id, limit=100)
+                    )
+                    if msg_count > 0 and msg_count % 10 == 0:
+                        self._summarize_conversation(
+                            session_id, message_count=10
+                        )
+            except Exception as e:
+                logger.warning(f"对话摘要失败: {e}")
+
+        # 启动后台线程
+        bg_thread = threading.Thread(target=background_tasks, daemon=True)
+        bg_thread.start()
+
+        # v0.6.0: 主动问答分析（这个需要返回给前端，不能后台）
         followup_info = None
         try:
             analysis = self.proactive_qa.analyze_conversation(
@@ -1074,20 +1432,6 @@ class XiaoLeAgent:
                         )
         except Exception as e:
             logger.warning(f"主动问答分析失败: {e}")
-
-        # v0.6.1: 定期生成对话摘要（每5轮对话）
-        try:
-            history = self.conversation.get_history(session_id, limit=1)
-            if history:
-                # 获取当前会话的消息总数（简单估算：历史记录数量）
-                message_count = len(
-                    self.conversation.get_history(session_id, limit=100)
-                )
-                # 每5轮对话（10条消息）生成一次摘要
-                if message_count > 0 and message_count % 10 == 0:
-                    self._summarize_conversation(session_id, message_count=10)
-        except Exception as e:
-            logger.warning(f"对话摘要失败: {e}")
 
         result = {
             "session_id": session_id,
@@ -1311,10 +1655,27 @@ class XiaoLeAgent:
     def _quick_intent_match(self, prompt):
         """
         v0.6.0: 快速意图匹配 - 无需AI调用的常见模式识别
+        v0.9.6: 添加简单对话检测，避免不必要的LLM调用
 
         返回: None 或 {"needs_tool": bool, "tool_name": str, "parameters": dict}
         """
         prompt_lower = prompt.lower().strip()
+
+        # v0.9.6: 简单问候和日常对话 - 直接返回无需工具
+        simple_greetings = [
+            '你好', '嗨', '哈喽', 'hello', 'hi', '早上好', '下午好', '晚上好',
+            '早安', '晚安', '在吗', '在不在', '你在吗', '在干嘛', '干嘛呢',
+            '谢谢', '谢谢你', '感谢', '好的', '知道了', '明白', '嗯', '好',
+            '行', 'ok', '再见', '拜拜', '回头见', '下次聊', '怎么了', '咋了',
+            '啥事', '有事吗', '你是谁', '你叫什么', '你能做什么', '你会什么',
+            '你好啊', '嗨嗨', '在呢', '我在', '来了',
+        ]
+        if prompt_lower in simple_greetings or (
+            len(prompt) <= 6 and any(
+                g in prompt_lower for g in simple_greetings)
+        ):
+            logger.info(f"⚡ 快速匹配: 简单对话无需工具 - {prompt}")
+            return {"needs_tool": False, "reason": "简单问候"}
 
         # 1. 时间查询 - 直接模式
         time_patterns = ['现在几点', '几点了', '当前时间', '现在时间', '今天日期', '今天几号']
@@ -1765,7 +2126,8 @@ class XiaoLeAgent:
         # v0.6.0: 快速规则匹配 - 常见模式直接识别，无需AI
         quick_match = self._quick_intent_match(prompt)
         if quick_match:
-            logger.info(f"✅ 快速规则匹配: {quick_match['tool_name']}")
+            tool_name = quick_match.get('tool_name', 'none')
+            logger.info(f"✅ 快速规则匹配: {tool_name}")
             return quick_match
 
         # 获取可用工具列表
@@ -2155,68 +2517,81 @@ class XiaoLeAgent:
                 conversation_memories = []
                 recent_memories = []
             else:
-                # 1. 优先获取 facts 标签的关键事实（用户主动告知的真实信息）
-                facts_memories = self.memory.recall(tag="facts", limit=50)
+                # v0.9.6: 并行记忆召回（提升性能）
+                import concurrent.futures
 
-            # 1.5 特别召回：家庭成员信息 (确保家人信息不被遗忘)
-            family_memories = []
-            try:
-                family_keywords = [
-                    '儿子', '女儿', '孩子', '老婆', '妻子',
-                    '老公', '丈夫', '爸', '妈', '父亲', '母亲',
-                    '姑娘', '闺女', '宝宝', '家人'
-                ]
-                # recall_by_keywords 返回字典列表
-                family_results = self.memory.recall_by_keywords(
-                    family_keywords, tag="facts", limit=20
-                )
-                family_memories = [m['content'] for m in family_results]
-            except Exception as e:
-                logger.warning(f"获取家庭成员记忆失败: {e}")
+                def recall_facts():
+                    return self.memory.recall(tag="facts", limit=50)
 
-            # 2. 使用语义搜索查找相关记忆（不限标签，搜索所有记忆）
-            semantic_memories = []
-            if hasattr(self.memory, 'semantic_recall'):
-                # 语义搜索用户问题相关的记忆（包括图片、事实等所有内容）
-                semantic_memories = self.memory.semantic_recall(
-                    query=prompt,
-                    tag=None,  # 不限制标签，搜索所有记忆
-                    limit=10,  # 减少语义搜索数量，避免淹没关键信息
-                    min_score=0.05  # 降低阈值，增加召回
-                )
+                def recall_family():
+                    try:
+                        family_keywords = [
+                            '儿子', '女儿', '孩子', '老婆', '妻子',
+                            '老公', '丈夫', '爸', '妈', '父亲', '母亲',
+                            '姑娘', '闺女', '宝宝', '家人'
+                        ]
+                        results = self.memory.recall_by_keywords(
+                            family_keywords, tag="facts", limit=20
+                        )
+                        return [m['content'] for m in results]
+                    except Exception as e:
+                        logger.warning(f"获取家庭成员记忆失败: {e}")
+                        return []
 
-            # 3. 获取最近的 image 记忆（课程表等重要信息）
-            image_memories = []
-            try:
-                image_memories = self.memory.recall(tag="image", limit=3)
-            except Exception as e:
-                logger.warning(f"获取图片记忆失败: {e}")
+                def recall_semantic():
+                    if hasattr(self.memory, 'semantic_recall'):
+                        return self.memory.semantic_recall(
+                            query=prompt, tag=None, limit=10, min_score=0.05
+                        )
+                    return []
 
-            # 3.1 获取课程表记忆 (schedule) - 修复：增加对 schedule 标签的检索
-            schedule_memories = []
-            try:
-                schedule_memories = self.memory.recall(tag="schedule", limit=1)
-            except Exception as e:
-                logger.warning(f"获取课程表失败: {e}")
+                def recall_image():
+                    try:
+                        return self.memory.recall(tag="image", limit=3)
+                    except:
+                        return []
 
-            # 3.2 获取文档记忆 (document) - 新增：显式检索最近上传的文档
-            document_memories = []
-            try:
-                document_memories = self.memory.recall(tag="document", limit=3)
-            except Exception as e:
-                logger.warning(f"获取文档记忆失败: {e}")
+                def recall_schedule():
+                    try:
+                        return self.memory.recall(tag="schedule", limit=1)
+                    except:
+                        return []
 
-            # 4. 获取最近的对话摘要（了解之前聊了什么）
-            conversation_memories = []
-            try:
-                conversation_memories = self.memory.recall(
-                    tag="conversation", limit=10
-                )
-            except Exception as e:
-                logger.warning(f"获取对话摘要失败: {e}")
+                def recall_document():
+                    try:
+                        return self.memory.recall(tag="document", limit=3)
+                    except:
+                        return []
 
-            # 4. 获取最近的 general 记忆（补充上下文）
-            recent_memories = self.memory.recall(tag="general", limit=3)
+                def recall_conversation():
+                    try:
+                        return self.memory.recall(tag="conversation", limit=10)
+                    except:
+                        return []
+
+                def recall_general():
+                    return self.memory.recall(tag="general", limit=3)
+
+                # 并行执行所有记忆召回
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    future_facts = executor.submit(recall_facts)
+                    future_family = executor.submit(recall_family)
+                    future_semantic = executor.submit(recall_semantic)
+                    future_image = executor.submit(recall_image)
+                    future_schedule = executor.submit(recall_schedule)
+                    future_document = executor.submit(recall_document)
+                    future_conversation = executor.submit(recall_conversation)
+                    future_general = executor.submit(recall_general)
+
+                    # 收集结果
+                    facts_memories = future_facts.result()
+                    family_memories = future_family.result()
+                    semantic_memories = future_semantic.result()
+                    image_memories = future_image.result()
+                    schedule_memories = future_schedule.result()
+                    document_memories = future_document.result()
+                    conversation_memories = future_conversation.result()
+                    recent_memories = future_general.result()
 
             # 5. 合并去重：图片记忆 > facts > 对话摘要 > 语义相关 > 最近记忆
             all_memories = []
@@ -2413,7 +2788,8 @@ class XiaoLeAgent:
             "top_p": llm_params.get('top_p', 0.9)
         }
 
-        response = requests.post(
+        # v0.9.6: 使用连接池
+        response = self._http_session.post(
             self.deepseek_url,
             headers=headers,
             json=data,
@@ -2466,7 +2842,8 @@ class XiaoLeAgent:
             "top_p": llm_params.get('top_p', 0.9)
         }
 
-        response = requests.post(
+        # v0.9.6: 使用连接池
+        response = self._http_session.post(
             self.qwen_url,
             headers=headers,
             json=data,

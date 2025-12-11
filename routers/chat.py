@@ -95,6 +95,63 @@ def _looks_like_time_reply(text: Optional[str]) -> bool:
     return any(keyword in text for keyword in indicators)
 
 
+# v0.9.6: SSE 真流式聊天接口（直连模型流式API）
+@router.get("/chat/sse")
+def chat_sse(
+    prompt: str,
+    session_id: Optional[str] = None,
+    response_style: str = "balanced",
+    current_user: str = Depends(get_current_user),
+    agent: XiaoLeAgent = Depends(get_agent),
+):
+    """
+    真正的 SSE 流式聊天接口（直连模型流式 API）
+    返回 Server-Sent Events 流，逐 token 输出
+
+    与 /chat/stream 的区别：
+    - /chat/stream: 先生成完整回复，再切片推送（假流式）
+    - /chat/sse: 直连 DeepSeek/Qwen 流式 API，逐 token 输出（真流式）
+
+    前端使用示例:
+    ```javascript
+    const eventSource = new EventSource('/chat/sse?prompt=你好&token=xxx');
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.done) {
+            eventSource.close();
+        } else if (data.content) {
+            appendText(data.content);  // 逐字显示
+        }
+    };
+    ```
+    """
+    logger.info(f"🌊 真流式聊天请求: prompt={prompt[:50]}...")
+
+    def event_generator():
+        try:
+            for chunk in agent.chat_stream(
+                prompt=prompt,
+                session_id=session_id,
+                user_id=current_user,
+                response_style=response_style
+            ):
+                yield chunk
+        except Exception as e:
+            import json
+            logger.error(f"流式聊天错误: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @router.post("/chat")
 def chat(
     prompt: str,
