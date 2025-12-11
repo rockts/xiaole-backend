@@ -119,6 +119,11 @@ class XiaoLeAgent:
         self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
         self.deepseek_url = "https://api.deepseek.com/chat/completions"
 
+        # Qwen 备用配置 (阿里云通义千问)
+        self.qwen_key = os.getenv("QWEN_API_KEY")
+        self.qwen_url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        self.qwen_model = os.getenv("QWEN_MODEL", "qwen-plus")
+
         # Claude配置
         self.claude_key = os.getenv("CLAUDE_API_KEY")
 
@@ -318,10 +323,55 @@ class XiaoLeAgent:
             timeout=60  # 增加超时时间以处理复杂问题
         )
 
+        # 检查是否需要切换到备用模型
+        if response.status_code == 503:
+            logger.warning("⚠️ DeepSeek 503，尝试切换到 Qwen 备用模型")
+            return self._call_qwen_fallback(system_prompt, user_prompt, max_tokens)
+
         response.raise_for_status()
         result = response.json()
         reply = result["choices"][0]["message"]["content"]
         logger.info(f"DeepSeek API 响应成功 - 回复长度: {len(reply)}")
+        return reply
+
+    def _call_qwen_fallback(self, system_prompt, user_prompt, max_tokens=512):
+        """
+        Qwen 备用模型 (阿里云通义千问)
+        当 DeepSeek 503 时自动调用
+        """
+        if not self.qwen_key:
+            logger.error("❌ Qwen API Key 未配置，无法使用备用模型")
+            raise Exception("DeepSeek 服务不可用，且未配置备用模型")
+
+        logger.info(f"🔄 切换到 Qwen 备用模型 ({self.qwen_model})")
+
+        headers = {
+            "Authorization": f"Bearer {self.qwen_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": self.qwen_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.5,
+            "max_tokens": max_tokens,
+            "stream": False
+        }
+
+        response = requests.post(
+            self.qwen_url,
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+
+        response.raise_for_status()
+        result = response.json()
+        reply = result["choices"][0]["message"]["content"]
+        logger.info(f"✅ Qwen 备用模型响应成功 - 回复长度: {len(reply)}")
         return reply
 
     @retry_with_backoff(
@@ -2370,11 +2420,64 @@ class XiaoLeAgent:
             timeout=60
         )
 
+        # 检查是否需要切换到备用模型
+        if response.status_code == 503:
+            logger.warning("⚠️ DeepSeek 503，尝试切换到 Qwen 备用模型")
+            return self._call_qwen_with_history_fallback(
+                system_prompt, messages, response_style
+            )
+
         response.raise_for_status()
         result = response.json()
         reply = result["choices"][0]["message"]["content"]
         logger.info(
             f"DeepSeek 多轮对话响应成功 - 回复长度: {len(reply)}, "
+            f"风格: {response_style}"
+        )
+        return reply
+
+    def _call_qwen_with_history_fallback(
+        self, system_prompt, messages, response_style="balanced"
+    ):
+        """
+        Qwen 备用模型 - 多轮对话版本
+        当 DeepSeek 503 时自动调用
+        """
+        if not self.qwen_key:
+            logger.error("❌ Qwen API Key 未配置，无法使用备用模型")
+            raise Exception("DeepSeek 服务不可用，且未配置备用模型")
+
+        logger.info(f"🔄 切换到 Qwen 备用模型 多轮对话 ({self.qwen_model})")
+
+        llm_params = self._get_llm_parameters(response_style)
+
+        headers = {
+            "Authorization": f"Bearer {self.qwen_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": self.qwen_model,
+            "messages": [
+                {"role": "system", "content": system_prompt}
+            ] + messages,
+            "temperature": llm_params['temperature'],
+            "max_tokens": llm_params['max_tokens'],
+            "top_p": llm_params.get('top_p', 0.9)
+        }
+
+        response = requests.post(
+            self.qwen_url,
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+
+        response.raise_for_status()
+        result = response.json()
+        reply = result["choices"][0]["message"]["content"]
+        logger.info(
+            f"✅ Qwen 备用模型多轮对话响应成功 - 回复长度: {len(reply)}, "
             f"风格: {response_style}"
         )
         return reply
