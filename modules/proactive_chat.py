@@ -174,7 +174,7 @@ class ProactiveChat:
 
         behaviors = session.query(UserBehavior).filter(
             UserBehavior.user_id == user_id,
-            UserBehavior.timestamp >= time_threshold
+            UserBehavior.created_at >= time_threshold
         ).all()
 
         if not behaviors:
@@ -183,7 +183,7 @@ class ProactiveChat:
         # 统计用户常在哪个小时段活跃
         hour_counts = {}
         for behavior in behaviors:
-            hour = behavior.timestamp.hour
+            hour = behavior.created_at.hour
             hour_counts[hour] = hour_counts.get(hour, 0) + 1
 
         current_hour = datetime.now().hour
