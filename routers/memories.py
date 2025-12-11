@@ -167,3 +167,18 @@ def get_conflict_report(
     """获取可读的冲突报告"""
     report = detector.generate_conflict_report()
     return {"report": report}
+
+
+@router.post("/memory")
+def create_memory(
+    content: str,
+    tag: str = "facts",
+    user_id: str = "admin",
+    agent: XiaoLeAgent = Depends(get_agent)
+):
+    """创建新记忆"""
+    try:
+        agent.memory.remember(content, tag=tag)
+        return {"success": True, "message": "记忆已创建"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

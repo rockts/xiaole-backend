@@ -1,7 +1,6 @@
 from fastapi import APIRouter
-from memory import MemoryManager
 from sqlalchemy import or_
-from db_setup import Memory
+from db_setup import Memory, SessionLocal
 import re
 
 router = APIRouter(
@@ -13,10 +12,10 @@ router = APIRouter(
 @router.get("")
 async def get_schedule(user_id: str = "default_user"):
     """获取用户课程表"""
+    session = SessionLocal()
     try:
-        memory_manager = MemoryManager()
-
-        memories = memory_manager.session.query(Memory).filter(
+        memories = session.query(Memory).filter(
+            Memory.user_id == user_id,
             Memory.tag.like('image:%'),
             or_(
                 Memory.content.like('%周一：晨读%'),
@@ -26,7 +25,8 @@ async def get_schedule(user_id: str = "default_user"):
         ).order_by(Memory.created_at.desc()).limit(1).all()
 
         if not memories:
-            memories = memory_manager.session.query(Memory).filter(
+            memories = session.query(Memory).filter(
+                Memory.user_id == user_id,
                 Memory.tag == 'schedule'
             ).order_by(Memory.created_at.desc()).limit(1).all()
 
@@ -80,11 +80,14 @@ async def get_schedule(user_id: str = "default_user"):
             "success": False,
             "error": str(e)
         }
+    finally:
+        session.close()
 
 
 @router.post("")
-async def save_schedule(request: dict):
+async def save_schedule(request: dict, user_id: str = "default_user"):
     """保存用户课程表"""
+    session = SessionLocal()
     try:
         schedule = request.get("schedule", {})
 
@@ -93,8 +96,6 @@ async def save_schedule(request: dict):
                 "success": False,
                 "error": "课程表数据为空"
             }
-
-        memory_manager = MemoryManager()
 
         courses_by_day = {}
         for key, course in schedule.get("courses", {}).items():
@@ -114,19 +115,23 @@ async def save_schedule(request: dict):
 
         content = "\n".join(lines)
 
-        old_memories = memory_manager.session.query(Memory).filter(
+        # 删除旧的课程表记忆
+        old_memories = session.query(Memory).filter(
+            Memory.user_id == user_id,
             Memory.tag == 'schedule'
         ).all()
 
         for mem in old_memories:
-            memory_manager.session.delete(mem)
+            session.delete(mem)
 
+        # 创建新的课程表记忆
         new_memory = Memory(
             content=f"用户课程表：\n{content}",
-            tag="schedule"
+            tag="schedule",
+            user_id=user_id
         )
-        memory_manager.session.add(new_memory)
-        memory_manager.session.commit()
+        session.add(new_memory)
+        session.commit()
 
         return {
             "success": True,
@@ -140,3 +145,5 @@ async def save_schedule(request: dict):
             "success": False,
             "error": str(e)
         }
+    finally:
+        session.close()
