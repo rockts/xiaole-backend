@@ -9,8 +9,28 @@ import logging
 import json
 import time
 from typing import Dict, Any, List, Optional
+from config import UPLOADS_DIR
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_image_path(image_path: str) -> Optional[str]:
+    """解析图片路径，处理 /uploads/ 前缀映射"""
+    if not image_path:
+        return None
+
+    # 处理 /uploads/ 或 uploads/ 前缀
+    if image_path.startswith("/uploads/") or image_path.startswith("uploads/"):
+        clean_path = image_path.lstrip("/").replace("uploads/", "", 1)
+        potential_path = os.path.join(UPLOADS_DIR, clean_path)
+        if os.path.exists(potential_path):
+            return potential_path
+
+    # 直接检查路径
+    if os.path.exists(image_path):
+        return image_path
+
+    return None
 
 
 class BaiduFaceClient:
@@ -169,6 +189,11 @@ class BaiduFaceClient:
         if not self._is_configured():
             return {"success": False, "error": "百度人脸识别 API 未配置"}
 
+        # 解析图片路径
+        resolved_path = _resolve_image_path(image_path)
+        if not resolved_path:
+            return {"success": False, "error": f"Image file not found: {image_path}"}
+
         # 确保分组存在
         if not self.ensure_group_exists():
             return {"success": False, "error": "创建人脸库分组失败"}
@@ -177,9 +202,9 @@ class BaiduFaceClient:
         if not token:
             return {"success": False, "error": "获取 access_token 失败"}
 
-        image_base64 = self._image_to_base64(image_path)
+        image_base64 = self._image_to_base64(resolved_path)
         if not image_base64:
-            return {"success": False, "error": f"无法读取图片: {image_path}"}
+            return {"success": False, "error": f"无法读取图片: {resolved_path}"}
 
         # 使用 person_name 作为 user_id（去除空格和特殊字符）
         if not user_id:
