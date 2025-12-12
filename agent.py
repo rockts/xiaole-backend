@@ -2539,6 +2539,34 @@ class XiaoLeAgent:
                         logger.warning(f"获取家庭成员记忆失败: {e}")
                         return []
 
+                # v0.9.7: 针对用户问题的关键词召回（生日、年龄等个人信息）
+                def recall_question_related():
+                    try:
+                        # 检测用户问题中的关键词
+                        question_keywords = []
+                        prompt_lower = prompt.lower()
+                        keyword_map = {
+                            '生日': ['生日', '出生'],
+                            '年龄': ['年龄', '几岁', '多大'],
+                            '名字': ['名字', '叫什么', '姓名'],
+                            '喜欢': ['喜欢', '爱好', '兴趣'],
+                            '工作': ['工作', '职业', '上班'],
+                            '住': ['住在', '地址', '家在'],
+                        }
+                        for key, patterns in keyword_map.items():
+                            if any(p in prompt_lower for p in patterns):
+                                question_keywords.append(key)
+                        
+                        if question_keywords:
+                            results = self.memory.recall_by_keywords(
+                                question_keywords, tag="facts", limit=10
+                            )
+                            return [m['content'] for m in results]
+                        return []
+                    except Exception as e:
+                        logger.warning(f"问题关键词召回失败: {e}")
+                        return []
+
                 def recall_semantic():
                     if hasattr(self.memory, 'semantic_recall'):
                         return self.memory.semantic_recall(
@@ -2574,9 +2602,10 @@ class XiaoLeAgent:
                     return self.memory.recall(tag="general", limit=3)
 
                 # 并行执行所有记忆召回
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                     future_facts = executor.submit(recall_facts)
                     future_family = executor.submit(recall_family)
+                    future_question = executor.submit(recall_question_related)  # v0.9.7
                     future_semantic = executor.submit(recall_semantic)
                     future_image = executor.submit(recall_image)
                     future_schedule = executor.submit(recall_schedule)
@@ -2587,6 +2616,7 @@ class XiaoLeAgent:
                     # 收集结果
                     facts_memories = future_facts.result()
                     family_memories = future_family.result()
+                    question_memories = future_question.result()  # v0.9.7
                     semantic_memories = future_semantic.result()
                     image_memories = future_image.result()
                     schedule_memories = future_schedule.result()
@@ -2636,6 +2666,14 @@ class XiaoLeAgent:
                     highlighted_mem = f"【关键事实】{mem}"
                     all_memories.append(highlighted_mem)
                     seen.add(mem)  # seen中存原始内容，避免重复
+
+            # v0.9.7: 问题相关记忆 - 高优先级，加【关键事实】标记
+            # 当用户问"你知道我生日吗"时，这里会召回包含"生日"的记忆
+            for mem in question_memories:
+                if mem not in seen and not is_outdated_reminder_memory(mem):
+                    highlighted_mem = f"【关键事实】{mem}"
+                    all_memories.append(highlighted_mem)
+                    seen.add(mem)
 
             # 第二优先级：facts 标签（关键事实，但限制数量）
             facts_count = 0
