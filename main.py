@@ -53,6 +53,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # 必须明确指定允许的域名
 allowed_origins = [
     "https://ai.leke.xyz",
+    "https://xiaole.app",
+    "https://www.xiaole.app",
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
