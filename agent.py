@@ -1566,10 +1566,21 @@ class XiaoLeAgent:
             return None
 
         # 1) 时间/日期/星期快速直答
+        # v0.9.7: 更严格的匹配 - 只有用户**询问**时间时才触发，避免误匹配
+        # 必须是疑问句式（包含问号或疑问词）
+        is_question = '?' in q or '？' in q or any(w in q for w in ['吗', '呢', '几', '什么', '多少'])
+        
+        # 排除：用户在**告知**日期信息（如"日期是xxx"、"生日是xxx"）
+        is_telling_date = any(p in q for p in ['日期是', '日子是', '那天是', '生日是', '上线', '记住'])
+        
+        if is_telling_date:
+            return None  # 用户在告知信息，不应该回复时间
+        
         time_keywords = [
-            '现在几点', '几点了', '几点', '当前时间', '现在时间',
-            '今天几号', '今天日期', '日期', '今天星期几', '星期几', '周几'
+            '现在几点', '几点了', '当前时间', '现在时间',
+            '今天几号', '今天日期', '今天星期几', '星期几', '周几'
         ]
+        # 只有明确询问时间的关键词才触发（移除了单独的"日期"和"几点"）
         if any(kw in q for kw in time_keywords):
             now = datetime.now()
             date_str = now.strftime('%Y年%m月%d日')
