@@ -91,13 +91,24 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 
+# 自定义StaticFiles类，添加CORS头（用于uploads等静态资源）
+class CORSStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        # 添加CORS头，允许前端跨域访问图片
+        response.headers["Access-Control-Allow-Origin"] = "https://ai.leke.xyz"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
+
 # 挂载静态文件目录
 app.mount(
     "/static",
     NoCacheStaticFiles(directory=STATIC_DIR),
     name="static"
 )
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+app.mount("/uploads", CORSStaticFiles(directory=UPLOADS_DIR), name="uploads")
 if os.path.exists(FILES_DIR):
     app.mount("/files", StaticFiles(directory=FILES_DIR), name="files")
 
