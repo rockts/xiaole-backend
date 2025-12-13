@@ -47,6 +47,64 @@ class ConversationManager:
 
         return candidate or default_title
 
+    def _generate_better_title(self, prompt: str, reply: str) -> str:
+        """根据首条用户消息 + 助手首个回复生成更贴近 ChatGPT 风格的简短标题
+
+        规则：
+        - 优先使用用户动词短语（如“解释…”，“查询…”，“设置提醒…”）作为开头
+        - 结合关键名词提炼主题（设备/品牌/功能/地点等）
+        - 长度控制在 12–24 字，必要时添加省略号
+        - 兜底：使用助手回复的第一句片段
+        """
+        default_title = f"对话 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        text_user = (prompt or '').strip()
+        text_assist = (reply or '').strip()
+
+        if not text_user and not text_assist:
+            return default_title
+
+        verbs = [
+            '解释', '查询', '设置', '制作', '归档', '分析', '总结',
+            '对比', '说明', '排查', '定位', '修复', '翻译', '介绍'
+        ]
+
+        # 选取用户句子的前子句
+        def pick_clause(s: str) -> str:
+            parts = re.split(r"[。！？?!\.，,]+", s)
+            return parts[0].strip() if parts and parts[0].strip() else s.strip()
+
+        clause = pick_clause(text_user)
+        # 找到开头动词
+        verb = next((v for v in verbs if clause.startswith(v)), None)
+
+        # 提取名词/关键词（粗略）：保留字母数字汉字，去掉多余助词
+        cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", clause)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+        candidate = cleaned
+        if verb:
+            # 限制在动词短语 + 主题，如：解释 αβ 含义、查询 iPhone 16 价格
+            # 简单规则：保留前 24 字符
+            candidate = candidate[:24]
+        else:
+            # 无动词，使用助手第一句兜底
+            assist_clause = pick_clause(text_assist)
+            assist_clean = re.sub(r"\s+", " ", assist_clause).strip()
+            candidate = assist_clean[:24] if assist_clean else cleaned[:24]
+
+        # 强制最短长度避免太短
+        candidate = candidate.strip()
+        if len(candidate) == 0:
+            return default_title
+
+        # 末尾省略号策略
+        final = candidate
+        if (text_user and len(text_user) > len(candidate)) or (text_assist and len(text_assist) > len(candidate)):
+            if len(final) >= 14 and not final.endswith('...'):
+                final = final + '...'
+
+        return final
+
     def create_session(self, user_id="default_user", title=None, prompt=None):
         """创建新的对话会话"""
         if not title:

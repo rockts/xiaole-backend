@@ -479,6 +479,18 @@ class XiaoLeAgent:
             session_id, "assistant", full_reply
         )
 
+        # v0.9.x: 流式结束后优化标题
+        try:
+            stats = self.conversation.get_session_stats(session_id)
+            current_title = stats.get('title') if stats else None
+            auto_title = self.conversation._derive_title(prompt)
+            if current_title and (current_title == auto_title or current_title.startswith('对话 ')):
+                better = self.conversation._generate_better_title(prompt, full_reply)
+                if better and better != current_title:
+                    self.conversation.update_session_title(session_id, better)
+        except Exception:
+            pass
+
         # 后台任务
         import threading
 
@@ -1334,6 +1346,18 @@ class XiaoLeAgent:
         assistant_msg_id = self.conversation.add_message(
             session_id, "assistant", reply
         )
+
+        # v0.9.x: 首次回复后优化会话标题
+        try:
+            stats = self.conversation.get_session_stats(session_id)
+            current_title = stats.get('title') if stats else None
+            auto_title = self.conversation._derive_title(user_message)
+            if current_title and (current_title == auto_title or current_title.startswith('对话 ')):
+                better = self.conversation._generate_better_title(user_message, reply)
+                if better and better != current_title:
+                    self.conversation.update_session_title(session_id, better)
+        except Exception:
+            pass
 
         # v0.9.6: 将非关键操作移到后台线程，不阻塞响应
         import threading
