@@ -4,6 +4,7 @@
 """
 from db_setup import Conversation, Message, SessionLocal
 from datetime import datetime
+import os
 import re
 import uuid
 from logger import logger
@@ -21,6 +22,11 @@ class ConversationManager:
     def _derive_title(self, prompt):
         """根据首条用户内容生成简短标题"""
         default_title = f"对话 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+        # 可通过环境变量关闭自动标题，回退到时间戳
+        if os.getenv("AUTO_TITLE", "1") in ["0", "false", "False"]:
+            return default_title
+
         if not prompt:
             return default_title
 
