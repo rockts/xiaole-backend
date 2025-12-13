@@ -65,7 +65,23 @@ class ConversationManager:
 
         verbs = [
             '解释', '查询', '设置', '制作', '归档', '分析', '总结',
-            '对比', '说明', '排查', '定位', '修复', '翻译', '介绍'
+            '对比', '说明', '排查', '定位', '修复', '翻译', '介绍',
+            '扫描', '识别', '整理', '规划', '安排', '统计', '优化'
+        ]
+
+        # 领域与主题关键词（优先提取）
+        domain_keywords = [
+            'OCR', 'OpenSSH', 'allowlist', 'Domain', 'API', '端口', '权限', '麦克风权限',
+            '透明方形 logo', 'logo', 'Gemini', 'Gemini 3', 'iPhone', 'iPhone 16',
+            '课程表', '提醒', '翻译', '归档', '对比', '总结', '统计', '公式', '符号',
+            'α', 'β', 'γ', 'θ'
+        ]
+
+        # 品牌/型号模式
+        brand_patterns = [
+            r"(?:iPhone\s*\d+)",
+            r"(?:Gemini\s*\d+)",
+            r"(?:OpenSSH)",
         ]
 
         # 选取用户句子的前子句
@@ -81,16 +97,46 @@ class ConversationManager:
         cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", clause)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
+        # 主题提取：先看品牌/型号，再看关键词白名单
+        topic = None
+        for pat in brand_patterns:
+            m = re.search(pat, clause, flags=re.IGNORECASE)
+            if m:
+                topic = m.group(0)
+                break
+        if not topic:
+            for kw in domain_keywords:
+                if kw in clause or kw in text_assist:
+                    topic = kw
+                    break
+
         candidate = cleaned
         if verb:
-            # 限制在动词短语 + 主题，如：解释 αβ 含义、查询 iPhone 16 价格
-            # 简单规则：保留前 24 字符
-            candidate = candidate[:24]
+            # 动词 + 主题 组合
+            if topic:
+                # 针对常见结构做补语
+                complements = {
+                    '解释': ["含义", "原理"],
+                    '查询': ["价格", "方法"],
+                    '设置': ["权限", "参数"],
+                    '排查': ["错误", "故障"],
+                    '分析': ["发布", "差异"],
+                    '制作': ["方案", "图标"],
+                    '归档': ["对话", "文档"],
+                    '翻译': ["内容"],
+                    '说明': ["流程"],
+                }
+                comp = complements.get(verb, [""])[0]
+                candidate = f"{verb} {topic} {comp}".strip()
+            else:
+                candidate = f"{verb} {pick_clause(clause)}"
+            # 长度控制 12–18 字
+            candidate = candidate[:18]
         else:
             # 无动词，使用助手第一句兜底
             assist_clause = pick_clause(text_assist)
             assist_clean = re.sub(r"\s+", " ", assist_clause).strip()
-            candidate = assist_clean[:24] if assist_clean else cleaned[:24]
+            candidate = assist_clean[:18] if assist_clean else cleaned[:18]
 
         # 强制最短长度避免太短
         candidate = candidate.strip()
@@ -100,7 +146,7 @@ class ConversationManager:
         # 末尾省略号策略
         final = candidate
         if (text_user and len(text_user) > len(candidate)) or (text_assist and len(text_assist) > len(candidate)):
-            if len(final) >= 14 and not final.endswith('...'):
+            if len(final) >= 12 and not final.endswith('...'):
                 final = final + '...'
 
         return final
