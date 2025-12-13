@@ -4,6 +4,7 @@
 """
 from db_setup import Conversation, Message, SessionLocal
 from datetime import datetime
+import re
 import uuid
 from logger import logger
 
@@ -17,10 +18,33 @@ class ConversationManager:
     def __init__(self):
         pass
 
-    def create_session(self, user_id="default_user", title=None):
+    def _derive_title(self, prompt):
+        """根据首条用户内容生成简短标题"""
+        default_title = f"对话 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        if not prompt:
+            return default_title
+
+        cleaned = re.sub(r"\s+", " ", str(prompt)).strip()
+        if not cleaned:
+            return default_title
+
+        # 取第一句话/子句作为标题骨架
+        parts = re.split(r"[。！？?!\.]+", cleaned, maxsplit=1)
+        candidate = parts[0].strip() if parts else cleaned
+
+        # 限长，超出则加省略号
+        max_len = 30
+        if len(candidate) > max_len:
+            candidate = candidate[:max_len] + "..."
+        elif len(cleaned) > len(candidate):
+            candidate = candidate + ("..." if len(candidate) >= 10 else "")
+
+        return candidate or default_title
+
+    def create_session(self, user_id="default_user", title=None, prompt=None):
         """创建新的对话会话"""
         if not title:
-            title = f"对话 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            title = self._derive_title(prompt)
 
         # 移除会话去重逻辑，确保每次都创建新会话
         # 之前的逻辑会导致10分钟内相同标题的会话被合并，用户体验不佳

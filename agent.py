@@ -421,7 +421,7 @@ class XiaoLeAgent:
             if not session_id:
                 session_id = self.conversation.create_session(
                     user_id=user_id,
-                    title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                    prompt=prompt
                 )
             user_msg_id = self.conversation.add_message(
                 session_id, "user", prompt
@@ -440,7 +440,7 @@ class XiaoLeAgent:
         if not session_id:
             session_id = self.conversation.create_session(
                 user_id=user_id,
-                title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                prompt=prompt
             )
 
         # 保存用户消息
@@ -923,7 +923,7 @@ class XiaoLeAgent:
             if not session_id:
                 session_id = self.conversation.create_session(
                     user_id=user_id,
-                    title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                    prompt=prompt
                 )
             user_msg_id = self.conversation.add_message(
                 session_id, "user", prompt)
@@ -943,7 +943,7 @@ class XiaoLeAgent:
             logger.info("🆕 session_id为空,准备创建新会话")
             session_id = self.conversation.create_session(
                 user_id=user_id,
-                title=prompt[:50] + "..." if len(prompt) > 50 else prompt
+                prompt=prompt
             )
             logger.info(f"✅ 新会话已创建,ID: {session_id}")
         else:
