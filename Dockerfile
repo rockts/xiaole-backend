@@ -5,13 +5,8 @@ FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装系统依赖
+# 安装系统依赖（仅保留必要的）
 RUN apt-get update && apt-get install -y \
-    cmake \
-    build-essential \
-    libboost-all-dev \
-    libopenblas-dev \
-    libgtk-3-dev \
     git \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
@@ -19,9 +14,6 @@ RUN apt-get update && apt-get install -y \
 # 设置时区
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# 人脸识别：优先使用百度 API（云端稳定），如需使用本地 face_recognition 请删除此行
-# ENV DISABLE_FACE_RECOGNITION=true
 
 # 工作目录
 WORKDIR /app
