@@ -59,6 +59,8 @@ allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    # 本地局域网前端
+    "http://192.168.88.104:3000",
 ]
 # 如果环境变量设置了额外域名，添加到列表中
 extra_origins = os.getenv("CORS_ORIGINS", "").split(",")
