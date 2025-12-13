@@ -3,6 +3,8 @@ let editingMessage = null;
 let editingImagePath = null;
 let originalContent = '';
 
+const API_BASE = '';  // 相对路径
+
 export function initComposer() {
     const messageInput = document.getElementById('messageInput');
     if (messageInput) {
@@ -57,7 +59,7 @@ export function initComposer() {
     });
 }
 
-export function sendMessageFromDiv() {
+export async function sendMessageFromDiv() {
     const input = document.getElementById('messageInput');
     if (!input) return;
     const message = input.textContent.trim();
@@ -71,10 +73,33 @@ export function sendMessageFromDiv() {
     input.contentEditable = 'false';
 
     if (editingMessage) {
-        let nextElement = editingMessage.nextElementSibling;
-        if (nextElement && nextElement.classList.contains('assistant')) {
-            nextElement.remove();
+        const messageId = editingMessage.dataset?.messageId;
+
+        // 调用后端 API 删除该消息及之后的所有消息
+        if (messageId) {
+            try {
+                const response = await fetch(`${API_BASE}/messages/${messageId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (!response.ok) {
+                    console.warn('删除消息失败，继续前端删除');
+                }
+            } catch (e) {
+                console.warn('删除消息请求失败:', e);
+            }
         }
+
+        // 删除该消息后的所有消息 DOM
+        let nextElement = editingMessage.nextElementSibling;
+        while (nextElement && nextElement.classList.contains('message')) {
+            const toRemove = nextElement;
+            nextElement = nextElement.nextElementSibling;
+            toRemove.remove();
+        }
+
         editingMessage.remove();
         clearEditingState();
     }

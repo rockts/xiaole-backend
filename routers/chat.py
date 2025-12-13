@@ -30,6 +30,19 @@ def fix_latex_formula(text):
     }
 
     # 1. 修复被拆分的格式 (先处理，避免干扰后续替换)
+    # 处理双 $$ 开头的情况 (DeepSeek 常见输出格式)
+    text = text.replace('$$\\alp$h$a$', 'α')
+    text = text.replace('$$\\be$t$a$', 'β')
+    text = text.replace('$$\\gam$m$a$', 'γ')
+    text = text.replace('$$\\ci$r$c$', '°')
+    text = text.replace('$$a$', '$a$')
+    text = text.replace('$$b$', '$b$')
+    text = text.replace('$$c$', '$c$')
+    # 处理不带反斜杠的 $$ 开头情况
+    text = text.replace('$$alp$h$a$', 'α')
+    text = text.replace('$$be$t$a$', 'β')
+    text = text.replace('$$gam$m$a$', 'γ')
+    # 处理单 $ 开头的情况
     text = text.replace('$\\alp$h$a$', 'α')
     text = text.replace('$\x07lp$h$a$', 'α')
     text = text.replace('$\\alph$a$', 'α')
@@ -37,6 +50,11 @@ def fix_latex_formula(text):
     text = text.replace('$\x08e$t$a$', 'β')
     text = text.replace('$\\gam$m$a$', 'γ')
     text = text.replace('\\gam$m$a$', 'γ')
+    # 处理裸格式 (无 $ 前缀)
+    text = text.replace('\\alp$h$a', 'α')
+    text = text.replace('\\be$t$a', 'β')
+    text = text.replace('\\gam$m$a', 'γ')
+    text = text.replace('\\ci$r$c', '°')
 
     # 2. 修复转义字符问题 (\a → \x07, \b → \x08)
     text = text.replace('$\x07lpha$', 'α')
@@ -415,6 +433,22 @@ def chat(
                         logger.warning("⚠️ 触发fallback替换!")
                         agent_result = fallback_reply
 
+                # 🔧 修复 AI 回复中的 LaTeX 格式（非流式路径）
+                if isinstance(agent_result, dict) and 'reply' in agent_result:
+                    original_reply = agent_result['reply']
+                    agent_result['reply'] = fix_latex_formula(original_reply)
+                    logger.info(
+                        f"🔧 [非流式] 修复前: {original_reply[:100] if len(original_reply) > 100 else original_reply}")
+                    logger.info(
+                        f"🔧 [非流式] 修复后: {agent_result['reply'][:100] if len(agent_result['reply']) > 100 else agent_result['reply']}")
+                elif isinstance(agent_result, str):
+                    original_reply = agent_result
+                    agent_result = fix_latex_formula(agent_result)
+                    logger.info(
+                        f"🔧 [非流式] 修复前: {original_reply[:100] if len(original_reply) > 100 else original_reply}")
+                    logger.info(
+                        f"🔧 [非流式] 修复后: {agent_result[:100] if len(agent_result) > 100 else agent_result}")
+
                 return agent_result
             else:
                 error_msg = vision_result.get(
@@ -469,7 +503,33 @@ def chat(
                     "error": str(e)
                 }
 
+    logger.info(
+        "🔧 [普通对话] 准备调用 agent.chat - session_id=%s, user_id=%s",
+        session_id, user_id
+    )
+
     result = agent.chat(prompt, session_id, user_id, response_style)
+
+    logger.info(
+        "🔧 [普通对话] agent.chat 返回类型: %s",
+        type(result).__name__
+    )
+
+    # 🔧 修复 AI 回复中的 LaTeX 格式（普通对话路径）
+    if isinstance(result, dict) and 'reply' in result:
+        original_reply = result['reply']
+        result['reply'] = fix_latex_formula(original_reply)
+        logger.info(
+            f"🔧 [普通对话] 修复前: {original_reply[:100] if len(original_reply) > 100 else original_reply}")
+        logger.info(
+            f"🔧 [普通对话] 修复后: {result['reply'][:100] if len(result['reply']) > 100 else result['reply']}")
+    elif isinstance(result, str):
+        original_reply = result
+        result = fix_latex_formula(result)
+        logger.info(
+            f"🔧 [普通对话] 修复前: {original_reply[:100] if len(original_reply) > 100 else original_reply}")
+        logger.info(
+            f"🔧 [普通对话] 修复后: {result[:100] if len(result) > 100 else result}")
 
     try:
         actual_session_id = result.get('session_id') if isinstance(
@@ -692,6 +752,13 @@ def chat_stream(
             result.get('reply') if isinstance(result, dict)
             else str(result)
         )
+
+        # 修复 AI 回复中的 LaTeX 格式
+        logger.info(
+            f"🔧 [流式] 修复前reply（前100字）: {reply[:100] if len(reply) > 100 else reply}")
+        reply = fix_latex_formula(reply)
+        logger.info(
+            f"🔧 [流式] 修复后reply（前100字）: {reply[:100] if len(reply) > 100 else reply}")
 
         # 🔥 关键修复: 在流式输出前检测并替换时间回复
         if image_path:

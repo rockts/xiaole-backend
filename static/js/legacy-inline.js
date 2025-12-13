@@ -1,5 +1,6 @@
 let currentSessionId = null;
 const API_BASE = '';
+window.API_BASE = API_BASE;  // 暴露给模块使用
 
 // 主题切换功能
 function toggleTheme() {
@@ -1442,10 +1443,29 @@ async function sendMessageFromDiv() {
         // 删除原来的消息及其后续的AI回复
         const messageId = editingMessage.dataset.messageId;
 
-        // 找到该消息后的第一条AI回复并删除
+        // 调用后端 API 删除该消息及之后的所有消息
+        if (messageId) {
+            try {
+                const response = await fetch(`/messages/${messageId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (!response.ok) {
+                    console.warn('删除消息失败，继续前端删除');
+                }
+            } catch (e) {
+                console.warn('删除消息请求失败:', e);
+            }
+        }
+
+        // 找到该消息后的所有消息并删除 DOM
         let nextElement = editingMessage.nextElementSibling;
-        if (nextElement && nextElement.classList.contains('assistant')) {
-            nextElement.remove();
+        while (nextElement && nextElement.classList.contains('message')) {
+            const toRemove = nextElement;
+            nextElement = nextElement.nextElementSibling;
+            toRemove.remove();
         }
 
         // 删除原用户消息

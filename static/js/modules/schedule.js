@@ -1,6 +1,8 @@
 // schedule.js - 课程表管理模块
 // 职责：加载、从记忆解析、渲染、更新课程、保存；事件委托
 
+const API_BASE = window.API_BASE || '';
+
 let scheduleData = {
     periods: ['第1节', '第2节', '第3节', '第4节', '第5节', '第6节', '第7节'],
     weekdays: ['周一', '周二', '周三', '周四', '周五'],
