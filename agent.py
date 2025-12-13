@@ -79,6 +79,13 @@ def fix_latex_formula(text):
     return text
 
 
+# 工具函数：去除不可见字符（如 ASCII 控制字符、零宽空格等）
+def strip_invisible_chars(text: str) -> str:
+    import re
+    invisible_pattern = r"[\x00-\x1F\x7F\u200B\u200C\u200D\uFEFF]"
+    return re.sub(invisible_pattern, "", text)
+
+
 class XiaoLeAgent:
     def __init__(self):
         self.memory = MemoryManager()
@@ -485,7 +492,9 @@ class XiaoLeAgent:
             current_title = stats.get('title') if stats else None
             auto_title = self.conversation._derive_title(prompt)
             if current_title and (current_title == auto_title or current_title.startswith('对话 ')):
-                better = self.conversation._generate_better_title(prompt, full_reply)
+                better = self.conversation._generate_better_title(
+                    prompt, full_reply)
+                better = strip_invisible_chars(better)
                 if better and better != current_title:
                     self.conversation.update_session_title(session_id, better)
         except Exception:
@@ -1354,6 +1363,7 @@ class XiaoLeAgent:
             auto_title = self.conversation._derive_title(user_message)
             if current_title and (current_title == auto_title or current_title.startswith('对话 ')):
                 better = self.conversation._generate_better_title(user_message, reply)
+                better = strip_invisible_chars(better)
                 if better and better != current_title:
                     self.conversation.update_session_title(session_id, better)
         except Exception:
@@ -1592,14 +1602,16 @@ class XiaoLeAgent:
         # 1) 时间/日期/星期快速直答
         # v0.9.7: 更严格的匹配 - 只有用户**询问**时间时才触发，避免误匹配
         # 必须是疑问句式（包含问号或疑问词）
-        is_question = '?' in q or '？' in q or any(w in q for w in ['吗', '呢', '几', '什么', '多少'])
-        
+        is_question = '?' in q or '？' in q or any(
+            w in q for w in ['吗', '呢', '几', '什么', '多少'])
+
         # 排除：用户在**告知**日期信息（如"日期是xxx"、"生日是xxx"）
-        is_telling_date = any(p in q for p in ['日期是', '日子是', '那天是', '生日是', '上线', '记住'])
-        
+        is_telling_date = any(
+            p in q for p in ['日期是', '日子是', '那天是', '生日是', '上线', '记住'])
+
         if is_telling_date:
             return None  # 用户在告知信息，不应该回复时间
-        
+
         time_keywords = [
             '现在几点', '几点了', '当前时间', '现在时间',
             '今天几号', '今天日期', '今天星期几', '星期几', '周几'
@@ -1671,8 +1683,6 @@ class XiaoLeAgent:
                 # 失败则不拦截，交给工具/LLM
                 return None
 
-        return None
-
         # 3) 身份/版本/能力自述（极简直答）
         about_kws = ['你是谁', '关于你', '关于小乐', '你能做什么', '能做什么', '版本']
         if any(kw in q for kw in about_kws):
@@ -1683,6 +1693,7 @@ class XiaoLeAgent:
             app_ver = os.getenv('APP_VERSION', '0.8.0')
             model_name = self.model or 'unknown-model'
             # 简短直答，避免长段
+
             return (
                 f"我是小乐 AI 管家。后端版本 {app_ver}，"
                 f"可用工具 {tool_count} 个，当前模型 {model_name}。"
@@ -2249,7 +2260,7 @@ class XiaoLeAgent:
 3. time - format(full/date/time)
 4. calculator - expression(数学表达式)
 5. reminder - operation(create/list/delete/update), content(创建必填),
-   time_desc(创建必填), reminder_id(删除/修改必填), status(active/all/completed)
+   time_desc(创建必填), title(可选)
    **删除/修改提醒时**:
    - 关键词："删除"、"取消"、"修改"、"改一下"、"推迟"、"延后"
    - 如用户说"删除/修改提醒72" -> 直接使用该ID
@@ -2354,7 +2365,7 @@ class XiaoLeAgent:
                 desc_end = prompt.find('</vision_result>')
                 if desc_start != -1 and desc_end != -1:
                     vision_desc = prompt[desc_start+15:desc_end].strip()
-                    if "我通过视觉能力识别到的图片内容：" in vision_desc:
+                    if vision_desc and "我通过视觉能力识别到的图片内容：" in vision_desc:
                         vision_desc = vision_desc.split(
                             "我通过视觉能力识别到的图片内容：", 1
                         )[-1].strip()
@@ -2399,23 +2410,20 @@ class XiaoLeAgent:
                 system_prompt = (
                     f"你是小乐AI管家，一个诚实、友好的个人助手。\n\n"
                     f"核心原则：\n"
-                    f"1. **你拥有完整的工具能力**：可以查询/创建/删除提醒、任务、搜索信息、查天气、**读写文件**等\n"
-                    f"   但没有连接智能设备（无手环/摄像头/传感器等物理设备）\n"
-                    f"2. **数据优先级**（从高到低）：\n"
-                    f"   ① 工具执行结果（最新实时数据，绝对准确）\n"
-                    f"   ② 对话历史中的上下文信息\n"
-                    f"   ③ 记忆库中的长期信息\n"
-                    f"3. 当工具返回数据时，必须以工具数据为准，忽略任何过时的记忆或对话历史\n"
+                    f"1. 你是对话助手，可以看图识别图片内容，可以记住人脸\n"
+                    f"2. 当用户上传照片说'这是XXX'时，你可以记住这个人的样子\n"
+                    f"3. 只使用用户明确告诉你的信息和下方的记忆库内容\n"
                     f"4. 记忆库按时间倒序排列，最新信息在前，优先使用最新信息\n"
-                    f"5. 如果记忆库和对话历史都没有相关信息，诚实说'您还没告诉我'\n"
-                    f"6. 绝不编造数据、假装有物理设备、或推测未知信息\n"
-                    f"7. 【课程表回答规则】：\n"
+                    f"5. 如果记忆库没有相关信息，诚实说'您还没告诉我'\n"
+                    f"6. 当用户告诉你新信息时，友好确认并记录\n"
+                    f"7. 绝不编造数据或推测未知信息\n"
+                    f"8. 【课程表回答规则】：\n"
                     f"   - 时段划分：上午=晨读+第1-4节，下午=第5-7节，晚上=课后辅导\n"
                     f"   - 只列出有课的时段，跳过\"无课\"的节次\n"
                     f"   - 格式：时段+课程名称，例如\"晨读：科学(6)、第4节：科学(5)\"\n"
                     f"   - 如果某个时间段完全没课，明确说明\n"
                     f"   - 示例：\"今天上午有晨读的科学(6)和第4节的科学(5)\"\n"
-                    f"8. 【重要事实】：\n"
+                    f"9. 【重要事实】：\n"
                     f"   - 必须严格区分家庭成员：女儿是【高艺瑄】，儿子是【高艺篪】\n"
                     f"   - 涉及名字、小名、家庭信息时，以【关键事实】或【facts】记忆为最高真理\n"
                     f"   - 记忆库中标记为【关键事实】的信息是最权威的，优先级高于其他所有信息\n"
@@ -2591,7 +2599,7 @@ class XiaoLeAgent:
                         for key, patterns in keyword_map.items():
                             if any(p in prompt_lower for p in patterns):
                                 question_keywords.append(key)
-                        
+
                         if question_keywords:
                             results = self.memory.recall_by_keywords(
                                 question_keywords, tag="facts", limit=10
@@ -2640,7 +2648,8 @@ class XiaoLeAgent:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                     future_facts = executor.submit(recall_facts)
                     future_family = executor.submit(recall_family)
-                    future_question = executor.submit(recall_question_related)  # v0.9.7
+                    future_question = executor.submit(
+                        recall_question_related)  # v0.9.7
                     future_semantic = executor.submit(recall_semantic)
                     future_image = executor.submit(recall_image)
                     future_schedule = executor.submit(recall_schedule)
@@ -2933,81 +2942,6 @@ class XiaoLeAgent:
         )
         return reply
 
-    def _format_reminders(self, reminders: list) -> str:
-        """
-        格式化提醒消息
-
-        Args:
-            reminders: 提醒列表
-
-        Returns:
-            格式化后的提醒文本
-        """
-        if not reminders:
-            return ""
-
-        reminder_texts = []
-        for reminder in reminders:
-            priority_emoji = {
-                1: "🔴",  # 最高优先级
-                2: "🟠",
-                3: "🟡",
-                4: "🟢",
-                5: "⚪"   # 最低优先级
-            }.get(reminder.get('priority', 3), "🔔")
-
-            title = reminder.get('title', '提醒')
-            content = reminder.get('content', '')
-
-            reminder_texts.append(f"{priority_emoji} **{title}**：{content}")
-
-        if len(reminders) == 1:
-            header = "🔔 **提醒** "
-        else:
-            header = f"🔔 **你有 {len(reminders)} 条提醒** "
-
-        return header + "\n" + "\n".join(reminder_texts)
-
-    @retry_with_backoff(
-        max_retries=3,
-        initial_delay=1.0,
-        exceptions=(Exception,)
-    )
-    @handle_api_errors
-    @log_execution
-    @retry_with_backoff(
-        max_retries=3,
-        initial_delay=1.0,
-        exceptions=(Exception,)
-    )
-    @handle_api_errors
-    @log_execution
-    def _call_claude_with_history(
-        self, system_prompt, messages, response_style="balanced"
-    ):
-        """
-        v0.6.0: Claude API 多轮对话（支持响应风格）
-        """
-        logger.info(f"调用 Claude 多轮对话 - 消息数: {len(messages)}")
-
-        # v0.6.0: 获取风格参数
-        llm_params = self._get_llm_parameters(response_style)
-
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=llm_params['max_tokens'],
-            temperature=llm_params['temperature'],
-            top_p=llm_params.get('top_p', 0.9),
-            system=system_prompt,
-            messages=messages
-        )
-        reply = response.content[0].text
-        logger.info(
-            f"Claude 多轮对话响应成功 - 回复长度: {len(reply)}, "
-            f"风格: {response_style}"
-        )
-        return reply
-
     # ==================== v0.8.0 任务管理功能 ====================
 
     def identify_complex_task(self, user_input: str, user_id: str) -> dict:
@@ -3150,7 +3084,7 @@ class XiaoLeAgent:
     ]
 }}
 
-示例任务"准备周末野餐"（假设用户在上海）:
+示例任务"准备周末的野餐"（假设用户在上海）:
 {{
     "steps": [
         {{
