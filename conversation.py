@@ -1,8 +1,3 @@
-    # 工具函数：去除不可见字符（如 ASCII 控制字符、零宽空格等）
-        import re
-        # 匹配所有 C0/C1 控制字符和常见零宽字符
-        invisible_pattern = r"[\x00-\x1F\x7F\u200B\u200C\u200D\uFEFF]"
-        return re.sub(invisible_pattern, "", text)
 """
 对话上下文管理模块
 管理多轮对话会话和消息历史
@@ -23,17 +18,6 @@ class ConversationManager:
 
     def __init__(self):
         pass
-
-    def _strip_trailing_ellipsis(self, title: str) -> str:
-        """展示前移除末尾的...或…，保持历史数据更整洁"""
-        if not title:
-            return title
-        cleaned = title.rstrip()
-        if cleaned.endswith('...'):
-            cleaned = cleaned[:-3].rstrip()
-        if cleaned.endswith('…'):
-            cleaned = cleaned[:-1].rstrip()
-        return cleaned or title
 
     def _derive_title(self, prompt):
         """根据首条用户内容生成简短标题"""
@@ -77,10 +61,12 @@ class ConversationManager:
         parts = re.split(r"[。！？?!\.]+", cleaned, maxsplit=1)
         candidate = parts[0].strip() if parts else cleaned
 
-        # 限长，直接截断
+        # 限长，超出则加省略号（更贴近短主题风格）
         max_len = 20
         if len(candidate) > max_len:
-            candidate = candidate[:max_len]
+            candidate = candidate[:max_len] + "..."
+        elif len(cleaned) > len(candidate):
+            candidate = candidate + ("..." if len(candidate) >= 10 else "")
 
         return candidate or default_title
 
@@ -237,7 +223,7 @@ class ConversationManager:
             if assist_clause and not any(assist_clause.startswith(b) for b in assist_blacklist):
                 candidate = assist_clause
 
-        # 长度控制在 16–18 字范围（直接截断，不再追加省略号）
+        # 长度控制在 16–18 字范围
         candidate = candidate.strip()
         candidate = candidate[:18]
 
@@ -246,14 +232,18 @@ class ConversationManager:
         if len(candidate) == 0:
             return default_title
 
-        return candidate
+        # 末尾省略号策略
+        final = candidate
+        if (text_user and len(text_user) > len(candidate)) or (text_assist and len(text_assist) > len(candidate)):
+            if len(final) >= 12 and not final.endswith('...'):
+                final = final + '...'
+
+        return final
 
     def create_session(self, user_id="default_user", title=None, prompt=None):
         """创建新的对话会话"""
         if not title:
             title = self._derive_title(prompt)
-
-        title = self._strip_trailing_ellipsis(title)
 
         # 移除会话去重逻辑，确保每次都创建新会话
         # 之前的逻辑会导致10分钟内相同标题的会话被合并，用户体验不佳
@@ -397,7 +387,7 @@ class ConversationManager:
             return [
                 {
                     "session_id": s.session_id,
-                    "title": self._strip_trailing_ellipsis(s.title),
+                    "title": s.title,
                     "pinned": getattr(s, 'pinned', False),  # v0.8.1
                     "created_at": s.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                     "updated_at": s.updated_at.strftime('%Y-%m-%d %H:%M:%S')
@@ -438,7 +428,7 @@ class ConversationManager:
             ).first()
 
             if conversation:
-                conversation.title = self._strip_trailing_ellipsis(new_title)
+                conversation.title = new_title
                 conversation.updated_at = datetime.now()
                 session.commit()
                 return True
@@ -481,7 +471,7 @@ class ConversationManager:
 
             return {
                 "session_id": session_id,
-                "title": self._strip_trailing_ellipsis(conversation.title),
+                "title": conversation.title,
                 "message_count": message_count,
                 "created_at": conversation.created_at.strftime(
                     '%Y-%m-%d %H:%M:%S'
