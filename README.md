@@ -90,3 +90,28 @@ xiaole-backend/
 ## 📄 License
 
 MIT
+# 小乐 2.0 Core Phase A
+
+实验入口为 `POST /api/v2/chat`，必须使用现有小乐 JWT：
+
+```json
+{"message":"你好，今天我们做什么？","conversation_id":null,"attachments":[]}
+```
+
+新 Core 位于 `xiaole_core/`，只负责 conversation、memory、action 三类编排。长期知识统一通过乐知 `POST /ask`，执行统一通过小可 `POST /v1/tasks` 与任务状态查询；旧聊天接口和生产 Web 不切换。
+
+本地配置见 `.env.example` 中的 `LEZHI_MEMORY_*`、`XIAOKE_ACTION_*` 和 `XIAOKE_API_TOKEN`。自动化测试命令：
+
+```bash
+./venv/bin/python -m unittest discover -s tests -t . -v
+```
+
+三个本地验收入口：
+
+```bash
+./venv/bin/python scripts/run_xiaole_core_e2e.py conversation
+./venv/bin/python scripts/run_xiaole_core_e2e.py memory
+./venv/bin/python scripts/run_xiaole_core_e2e.py action
+```
+
+`action` 模式只启动临时小可数据库和本机 Mock Notification 下游，不得用于真实 Bark 验收。
