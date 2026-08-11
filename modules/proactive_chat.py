@@ -225,9 +225,9 @@ class ProactiveChat:
         time_threshold = datetime.now() - timedelta(days=7)
 
         interesting_memories = session.query(Memory).filter(
-            Memory.timestamp >= time_threshold,
+            Memory.created_at >= time_threshold,
             Memory.tag == "facts"  # 事实类记忆更有讨论价值
-        ).order_by(Memory.timestamp.desc()).limit(5).all()
+        ).order_by(Memory.created_at.desc()).limit(5).all()
 
         if not interesting_memories:
             return {"should_chat": False}

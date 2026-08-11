@@ -25,6 +25,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
 
+def _deepseek_fallback_category(status_code):
+    """Return the safe fallback category for documented DeepSeek errors."""
+    if status_code == 402:
+        return "billing_quota"
+    if status_code == 503:
+        return "service_unavailable"
+    return None
+
+
 def fix_latex_formula(text):
     """统一数学符号格式为 Unicode 字符
 
@@ -347,9 +356,13 @@ class XiaoLeAgent:
             timeout=60
         )
 
-        # 检查是否需要切换到备用模型
-        if response.status_code == 503:
-            logger.warning("⚠️ DeepSeek 503，尝试切换到 Qwen 备用模型")
+        fallback_category = _deepseek_fallback_category(response.status_code)
+        if fallback_category:
+            logger.warning(
+                "model_primary_failed provider=deepseek category=%s "
+                "request_id=legacy-unavailable fallback=True",
+                fallback_category
+            )
             return self._call_qwen_fallback(
                 system_prompt, user_prompt, max_tokens
             )
@@ -363,7 +376,7 @@ class XiaoLeAgent:
     def _call_qwen_fallback(self, system_prompt, user_prompt, max_tokens=512):
         """
         Qwen 备用模型 (阿里云通义千问)
-        当 DeepSeek 503 时自动调用
+        当 DeepSeek 余额不足或服务繁忙时自动调用
         """
         if not self.qwen_key:
             logger.error("❌ Qwen API Key 未配置，无法使用备用模型")
@@ -570,9 +583,13 @@ class XiaoLeAgent:
             stream=True  # requests 流式
         )
 
-        # 503 时切换备用模型
-        if response.status_code == 503:
-            logger.warning("⚠️ DeepSeek 503，流式切换到 Qwen")
+        fallback_category = _deepseek_fallback_category(response.status_code)
+        if fallback_category:
+            logger.warning(
+                "model_primary_failed provider=deepseek category=%s "
+                "request_id=legacy-unavailable fallback=True stream=True",
+                fallback_category
+            )
             yield from self._call_qwen_stream_fallback(
                 system_prompt, messages, response_style
             )
@@ -2875,9 +2892,13 @@ class XiaoLeAgent:
             timeout=60
         )
 
-        # 检查是否需要切换到备用模型
-        if response.status_code == 503:
-            logger.warning("⚠️ DeepSeek 503，尝试切换到 Qwen 备用模型")
+        fallback_category = _deepseek_fallback_category(response.status_code)
+        if fallback_category:
+            logger.warning(
+                "model_primary_failed provider=deepseek category=%s "
+                "request_id=legacy-unavailable fallback=True history=True",
+                fallback_category
+            )
             return self._call_qwen_with_history_fallback(
                 system_prompt, messages, response_style
             )
@@ -2896,7 +2917,7 @@ class XiaoLeAgent:
     ):
         """
         Qwen 备用模型 - 多轮对话版本
-        当 DeepSeek 503 时自动调用
+        当 DeepSeek 余额不足或服务繁忙时自动调用
         """
         if not self.qwen_key:
             logger.error("❌ Qwen API Key 未配置，无法使用备用模型")

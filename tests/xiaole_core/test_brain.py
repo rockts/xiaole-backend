@@ -3,6 +3,7 @@ import unittest
 from xiaole_core.brain import BrainCore
 from xiaole_core.errors import MemoryUnavailable
 from xiaole_core.gateways.action import ActionGateway
+from xiaole_core.models import ModelRouter, OpenAICompatibleProvider
 from xiaole_core.schemas import ActionResult, BrainRequest, MemoryResult
 
 
@@ -27,6 +28,17 @@ class Gateway:
         if self.error: raise self.error
         return self.result
     def execute(self, *_): self.calls += 1; return self.result
+
+
+class ModelTransport:
+    def __init__(self, status_code, payload):
+        self.status_code, self.payload, self.calls = status_code, payload, 0
+    def post(self, *_args, **_kwargs):
+        self.calls += 1
+        return type("Response", (), {
+            "status_code": self.status_code,
+            "json": lambda _self: self.payload,
+        })()
 
 
 class BrainTests(unittest.TestCase):
@@ -69,6 +81,42 @@ class BrainTests(unittest.TestCase):
         self.assertIsNone(response.action)
         self.assertIn("执行系统暂时不可用", response.answer)
         self.assertEqual((model.calls, memory.calls), (0, 0))
+
+    def test_deepseek_billing_failure_cannot_repeat_action(self):
+        deepseek_transport = ModelTransport(
+            402, {"error": {"message": "Insufficient Balance"}}
+        )
+        qwen_transport = ModelTransport(
+            200, {"choices": [{"message": {"content": "action"}}]}
+        )
+        models = ModelRouter(
+            OpenAICompatibleProvider(
+                "https://api.deepseek.com/chat/completions",
+                "deepseek-secret",
+                "deepseek-chat",
+                transport=deepseek_transport,
+            ),
+            OpenAICompatibleProvider(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                "qwen-secret",
+                "qwen-plus",
+                transport=qwen_transport,
+            ),
+        )
+        action = Gateway(ActionResult(
+            task_id="task-1",
+            status="success",
+            summary="执行一次",
+            request_id="action-request",
+        ))
+
+        response = BrainCore(Context(), models, Gateway(), action).respond(
+            BrainRequest(message="帮我处理一下"), "alice"
+        )
+
+        self.assertEqual(response.answer, "执行一次")
+        self.assertEqual(action.calls, 1)
+        self.assertEqual((deepseek_transport.calls, qwen_transport.calls), (1, 1))
 
 
 if __name__ == "__main__": unittest.main()
