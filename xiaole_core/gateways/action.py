@@ -41,7 +41,7 @@ class ActionGateway:
                     summary = "测试通知任务已由小可成功执行。" if status == "success" else f"测试通知任务未完成，状态为 {status}。"
                     return ActionResult(task_id=task_id,status=status,summary=summary,evidence=evidence,request_id=request_id)
                 self.sleeper(self.poll_interval)
-            return ActionResult(task_id=task_id,status="timeout",summary="等待小可任务完成超时，不能确认通知已成功。",request_id=request_id)
+            return ActionResult(task_id=task_id,status="timeout",summary="通知已受理，正在等待发送；当前尚不能确认发送成功。",request_id=request_id)
         except ActionUnavailable:
             raise
         except Exception as exc:

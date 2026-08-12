@@ -66,6 +66,19 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(result.status, "dead")
         self.assertNotIn("成功", result.summary)
 
+    def test_action_timeout_reports_accepted_waiting_delivery_not_success(self):
+        transport = Transport([
+            Response(202,{"task":{"task_id":"t","status":"pending"}}),
+            Response(200,{"task":{"task_id":"t","status":"running"}}),
+        ])
+        result = ActionGateway(
+            "http://local", "t", timeout=.001, poll_interval=1,
+            transport=transport, sleeper=lambda _:None,
+        ).execute(ActionCommand.notification("c","r"), "r")
+        self.assertEqual(result.status, "timeout")
+        self.assertIn("通知已受理，正在等待发送", result.summary)
+        self.assertNotIn("执行成功", result.summary)
+
     def test_unconfigured_action_is_unavailable_without_network_call(self):
         transport = Transport([])
         with self.assertRaises(ActionUnavailable):
