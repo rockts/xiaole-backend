@@ -62,7 +62,7 @@ class ActionCommand(StrictModel):
             request_id=request_id,
             parameters={
                 "title": "【小乐 2.0】",
-                "body": "小乐已成功通过小可完成首次真实 Action。",
+                "body": "小乐已成功通过小可完成生产闭环。",
                 "level": "active",
                 "group": "小乐",
                 "url": "",

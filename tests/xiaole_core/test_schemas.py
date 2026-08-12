@@ -10,7 +10,7 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(command.task_type, "notification.send")
         self.assertEqual(command.parameters["delivery"], "bark")
         self.assertEqual(command.parameters["title"], "【小乐 2.0】")
-        self.assertEqual(command.parameters["body"], "小乐已成功通过小可完成首次真实 Action。")
+        self.assertEqual(command.parameters["body"], "小乐已成功通过小可完成生产闭环。")
         with self.assertRaises(ValidationError):
             ActionCommand(task_type="shell.exec", parameters={}, conversation_id="c1", request_id="r1")
 
