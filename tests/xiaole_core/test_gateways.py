@@ -1,4 +1,5 @@
 import unittest
+import requests
 
 from xiaole_core.errors import ActionUnavailable, MemoryUnavailable
 from xiaole_core.gateways.action import ActionGateway
@@ -16,10 +17,48 @@ class Response:
 class Transport:
     def __init__(self, responses): self.responses, self.calls = list(responses), []
     def post(self, url, **kwargs): self.calls.append(("POST", url, kwargs)); return self.responses.pop(0)
-    def get(self, url, **kwargs): self.calls.append(("GET", url, kwargs)); return self.responses.pop(0)
+    def get(self, url, **kwargs):
+        self.calls.append(("GET", url, kwargs))
+        response = self.responses.pop(0)
+        if isinstance(response, Exception): raise response
+        return response
 
 
 class GatewayTests(unittest.TestCase):
+    def test_profile_classifies_success_without_exposing_payload_in_metadata(self):
+        secret_value = "敏感学校名称"
+        result = MemoryGateway("http://local", "secret", transport=Transport([
+            Response(200, {"fields":{"current_school":{"value":secret_value,"status":"confirmed","subject":"current_user"}}})
+        ])).profile("r")
+        self.assertEqual(result.result, "success")
+        self.assertEqual(result.reason_codes, ["profile_request_success"])
+        self.assertEqual(result.payload["fields"]["current_school"]["value"], secret_value)
+        self.assertNotIn(secret_value, str({"result":result.result,"reason_codes":result.reason_codes}))
+
+    def test_profile_classifies_401_as_unauthorized(self):
+        result = MemoryGateway("http://local", transport=Transport([Response(401, {})])).profile("r")
+        self.assertEqual(result.result, "unauthorized")
+        self.assertEqual(result.reason_codes, ["profile_http_401"])
+        self.assertEqual(result.payload, {})
+
+    def test_profile_classifies_timeout_as_unavailable_without_exception_text(self):
+        marker = "https://secret.example/path?token=must-not-leak"
+        result = MemoryGateway("http://local", transport=Transport([requests.Timeout(marker)])).profile("r")
+        self.assertEqual(result.result, "unavailable")
+        self.assertEqual(result.reason_codes, ["profile_timeout"])
+        self.assertNotIn(marker, repr(result))
+
+    def test_profile_classifies_invalid_json_and_schema(self):
+        cases = (
+            (Response(200, ValueError("raw secret response")), "profile_invalid_json"),
+            (Response(200, []), "profile_schema_invalid"),
+        )
+        for response, reason in cases:
+            with self.subTest(reason=reason):
+                result = MemoryGateway("http://local", transport=Transport([response])).profile("r")
+                self.assertEqual(result.result, "invalid_response")
+                self.assertEqual(result.reason_codes, [reason])
+
     def test_memory_preserves_complete_sources_and_contract(self):
         sources = [{"title":"通知", "original_path":"x.pdf", "issue_date":"2026-08-11", "custom":"keep"}]
         transport = Transport([Response(200, {"ok":True,"question":"q","answer":"grounded","sources":sources,"flags":{"degraded":False}})])

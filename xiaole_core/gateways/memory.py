@@ -2,7 +2,7 @@ import requests
 from urllib.parse import urljoin
 
 from ..errors import MemoryUnavailable
-from ..schemas import MemoryResult
+from ..schemas import MemoryResult, ProfileGatewayResponse
 
 
 class MemoryGateway:
@@ -55,4 +55,30 @@ class MemoryGateway:
 
     def status(self, request_id: str) -> dict: return self._get("/api/v1/status/intelligence", request_id)
     def knowledge(self, request_id: str) -> dict: return self._get("/api/v1/status/knowledge", request_id)
-    def profile(self, request_id: str) -> dict: return self._get("/api/v1/profile", request_id)
+    def profile(self, request_id: str) -> ProfileGatewayResponse:
+        headers = {"X-Request-ID": request_id}
+        if self.token: headers["X-KOS-Token"] = self.token
+        try:
+            response = self.transport.get(f"{self.base_url}/api/v1/profile", headers=headers, timeout=self.timeout)
+        except requests.Timeout:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_timeout"])
+        except requests.ConnectionError:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_connect_error"])
+        except Exception:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_connect_error"])
+        status = response.status_code
+        if status in (401, 403):
+            return ProfileGatewayResponse(result="unauthorized", reason_codes=[f"profile_http_{status}"])
+        if status == 404:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_http_404"])
+        if status >= 500:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_http_5xx"])
+        if status != 200:
+            return ProfileGatewayResponse(result="unavailable", reason_codes=["profile_connect_error"])
+        try:
+            body = response.json()
+        except Exception:
+            return ProfileGatewayResponse(result="invalid_response", reason_codes=["profile_invalid_json"])
+        if not isinstance(body, dict):
+            return ProfileGatewayResponse(result="invalid_response", reason_codes=["profile_schema_invalid"])
+        return ProfileGatewayResponse(payload=body, result="success", reason_codes=["profile_request_success"])

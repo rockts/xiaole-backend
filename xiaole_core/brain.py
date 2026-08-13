@@ -7,7 +7,7 @@ import re
 
 from .errors import ActionUnavailable, MemoryUnavailable, ModelUnavailable
 from .intent import IntentRouter, is_current_employment_query
-from .schemas import ActionCommand, BrainRequest, BrainResponse, Diagnostics, Intent
+from .schemas import ActionCommand, BrainRequest, BrainResponse, Diagnostics, Intent, ProfileGatewayResponse
 
 
 class BrainCore:
@@ -26,7 +26,7 @@ class BrainCore:
         answer, sources, action = "", [], None
         model, fallback, gateway, gateways = "", False, None, []
         if decision.intent in (Intent.KNOWLEDGE, Intent.STATUS, Intent.PLANNING):
-            answer, sources, model, fallback, gateways = self._read_answer(decision.intent, request.message, history, request_id)
+            answer, sources, model, fallback, gateways, profile_diagnostics = self._read_answer(decision.intent, request.message, history, request_id)
             gateway = gateways[0] if len(gateways) == 1 else None
         elif decision.intent == Intent.ACTION:
             gateway = "action"
@@ -43,14 +43,16 @@ class BrainCore:
             except ModelUnavailable:
                 answer = "模型服务暂时不可用，请稍后再试。"
         self.context.append_exchange(user_id, conversation_id, request.message, answer)
+        profile_diagnostics = locals().get("profile_diagnostics", {})
         return BrainResponse(
             request_id=request_id, conversation_id=conversation_id, intent=decision.intent, answer=answer,
             sources=sources, action=action,
-            diagnostics=Diagnostics(model=model, gateway_used=gateway, gateways_used=gateways, latency_ms=max(0,int((time.monotonic()-started)*1000)), fallback=fallback),
+            diagnostics=Diagnostics(model=model, gateway_used=gateway, gateways_used=gateways, latency_ms=max(0,int((time.monotonic()-started)*1000)), fallback=fallback, **profile_diagnostics),
         )
 
     def _read_answer(self, intent, message, history, request_id):
         facts, sources, used, unavailable = {}, [], [], []
+        profile_diagnostics = {}
         current_school = is_current_employment_query(message)
         personal_fact = current_school or any(x in message for x in ("得过奖", "获过奖", "学校", "职业", "身份", "角色"))
         names = {Intent.STATUS: ("status",), Intent.PLANNING: ("profile", "knowledge", "status", "memory"), Intent.KNOWLEDGE: (("profile", "memory") if personal_fact else ("memory",))}[intent]
@@ -58,6 +60,13 @@ class BrainCore:
         for name in names:
             try:
                 value = self.read_gateway.ask(message, history, request_id) if name == "memory" else getattr(self.read_gateway, name)(request_id)
+                if name == "profile" and current_school:
+                    profile_diagnostics = self._profile_diagnostics(value)
+                    if isinstance(value, ProfileGatewayResponse):
+                        if value.result != "success":
+                            unavailable.append(name)
+                            continue
+                        value = value.payload
                 facts[name] = self._project(name, value, intent, current_school=current_school); used.append(name)
                 if name == "status" and isinstance(value, dict) and (value.get("recommended_items") or value.get("recommended_today")): used.append("recommendation")
                 if name == "memory":
@@ -66,12 +75,15 @@ class BrainCore:
             except (MemoryUnavailable, AttributeError): unavailable.append(name)
         if intent == Intent.KNOWLEDGE and not personal_fact:
             if "memory" in facts:
-                return self._safe_text(getattr(value, "answer", ""), 4000) or "我目前没能读取到可用资料。", sources, "", False, used
-            return "我目前没能读取到乐知资料，暂时无法确认相关信息。", [], "", False, used
+                return self._safe_text(getattr(value, "answer", ""), 4000) or "我目前没能读取到可用资料。", sources, "", False, used, profile_diagnostics
+            return "我目前没能读取到乐知资料，暂时无法确认相关信息。", [], "", False, used, profile_diagnostics
         if current_school:
             field = ((facts.get("profile") or {}).get("fields") or {}).get("current_school") or {}
             if field.get("status") == "confirmed" and field.get("subject") == "current_user" and field.get("value"):
-                return f"你现在在{field['value']}工作。", [], "", False, used
+                profile_diagnostics.update(profile_gateway_result="success", profile_current_school_state="ready", deterministic_profile_hit=True)
+                profile_diagnostics["profile_reason_codes"] += ["current_school_ready", "deterministic_profile_hit"]
+                return f"你现在在{field['value']}工作。", [], "", False, used, profile_diagnostics
+            profile_diagnostics = self._current_school_miss(profile_diagnostics, facts)
         instruction = {
             Intent.STATUS: "根据今日扫描和推荐直接回答最应关注的事；说明是否扫描、新发布和无事项的原因，不要要求外部新闻。",
             Intent.PLANNING: "给出3个紧凑、有依据的公众号选题；每个包含 title/angle、why_now、source_basis、relation_to_user、suggested_next_step；资料不足要说明。不得主动承诺或提及小可执行动作，不得把 Action 或小可作为选题。",
@@ -85,9 +97,56 @@ class BrainCore:
                 missing = [label for label in ("你本人", "你指导的学生", "学校") if label not in answer]
                 if missing:
                     answer = answer.rstrip() + "\n\n主体归因：\n- 你本人：目前证据不足。\n- 你指导的学生：目前证据不足。\n- 学校：目前证据不足。"
-            return answer, sources, result.model, result.fallback, used
+            return answer, sources, result.model, result.fallback, used, profile_diagnostics
         except ModelUnavailable:
-            return "我目前没能完成回答；已读取到的资料不会被当作确认结论。", sources, "", False, used
+            return "我目前没能完成回答；已读取到的资料不会被当作确认结论。", sources, "", False, used, profile_diagnostics
+
+    @staticmethod
+    def _profile_diagnostics(value):
+        if isinstance(value, ProfileGatewayResponse):
+            diagnostics = {
+                "profile_gateway_called": True,
+                "profile_gateway_result": value.result,
+                "profile_current_school_state": "invalid",
+                "deterministic_profile_hit": False,
+                "profile_reason_codes": list(value.reason_codes),
+            }
+            if value.result == "success" and not isinstance(value.payload.get("fields"), dict):
+                diagnostics["profile_gateway_result"] = "missing_fact"
+                diagnostics["profile_reason_codes"].append("profile_fields_missing")
+            return diagnostics
+        return {
+            "profile_gateway_called": True,
+            "profile_gateway_result": "success",
+            "profile_current_school_state": "invalid",
+            "deterministic_profile_hit": False,
+            "profile_reason_codes": ["profile_request_success"],
+        }
+
+    @staticmethod
+    def _current_school_miss(diagnostics, facts):
+        if not diagnostics:
+            diagnostics = {"profile_gateway_called": True, "profile_gateway_result": "unavailable", "profile_current_school_state": "invalid", "deterministic_profile_hit": False, "profile_reason_codes": []}
+        if diagnostics["profile_gateway_result"] != "success":
+            if diagnostics["profile_gateway_result"] == "missing_fact":
+                diagnostics["profile_current_school_state"] = "invalid"
+            diagnostics["profile_reason_codes"].append("deterministic_profile_miss")
+            return diagnostics
+        profile = facts.get("profile") or {}
+        if "fields" not in profile:
+            state, reason = "invalid", "profile_fields_missing"
+        else:
+            fields = profile.get("fields") or {}
+            if "current_school" not in fields:
+                state, reason = "missing", "current_school_missing"
+            else:
+                field = fields.get("current_school") or {}
+                if field.get("status") != "confirmed": state, reason = "not_confirmed", "current_school_status_not_confirmed"
+                elif field.get("subject") != "current_user": state, reason = "wrong_subject", "current_school_subject_not_current_user"
+                else: state, reason = "invalid", "current_school_value_missing"
+        diagnostics.update(profile_gateway_result="missing_fact", profile_current_school_state=state)
+        diagnostics["profile_reason_codes"] += [reason, "deterministic_profile_miss"]
+        return diagnostics
 
     @classmethod
     def _project(cls, name, value, intent, current_school=False):

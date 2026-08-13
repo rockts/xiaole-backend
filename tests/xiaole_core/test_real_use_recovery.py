@@ -4,7 +4,7 @@ import unittest
 
 from xiaole_core.brain import BrainCore
 from xiaole_core.errors import MemoryUnavailable
-from xiaole_core.schemas import BrainRequest, MemoryResult
+from xiaole_core.schemas import BrainRequest, MemoryResult, ProfileGatewayResponse
 
 
 class Context:
@@ -70,6 +70,52 @@ class RealUseRecoveryTests(unittest.TestCase):
         response = brain.respond(BrainRequest(message="我现在在哪个学校工作？"), "u")
         self.assertEqual(response.answer, "你现在在新华门小学工作。")
         self.assertEqual(read.calls, ["profile"])
+        self.assertTrue(response.diagnostics.profile_gateway_called)
+        self.assertEqual(response.diagnostics.profile_gateway_result, "success")
+        self.assertEqual(response.diagnostics.profile_current_school_state, "ready")
+        self.assertTrue(response.diagnostics.deterministic_profile_hit)
+        self.assertEqual(response.diagnostics.profile_reason_codes, ["profile_request_success", "current_school_ready", "deterministic_profile_hit"])
+
+    def test_current_school_safe_diagnostics_cover_all_miss_states(self):
+        cases = (
+            (ProfileGatewayResponse(result="unauthorized", reason_codes=["profile_http_401"]), "unauthorized", "invalid", "profile_http_401"),
+            (ProfileGatewayResponse(result="unavailable", reason_codes=["profile_timeout"]), "unavailable", "invalid", "profile_timeout"),
+            (ProfileGatewayResponse(payload={}, result="success", reason_codes=["profile_request_success"]), "missing_fact", "invalid", "profile_fields_missing"),
+            (ProfileGatewayResponse(payload={"fields":{}}, result="success", reason_codes=["profile_request_success"]), "missing_fact", "missing", "current_school_missing"),
+            (ProfileGatewayResponse(payload={"fields":{"current_school":{"value":"敏感学校名称","status":"candidate","subject":"current_user"}}}, result="success", reason_codes=["profile_request_success"]), "missing_fact", "not_confirmed", "current_school_status_not_confirmed"),
+            (ProfileGatewayResponse(payload={"fields":{"current_school":{"value":"敏感学校名称","status":"confirmed","subject":"other"}}}, result="success", reason_codes=["profile_request_success"]), "missing_fact", "wrong_subject", "current_school_subject_not_current_user"),
+            (ProfileGatewayResponse(payload={"fields":{"current_school":{"value":"","status":"confirmed","subject":"current_user"}}}, result="success", reason_codes=["profile_request_success"]), "missing_fact", "invalid", "current_school_value_missing"),
+        )
+        for gateway_value, gateway_result, state, reason in cases:
+            with self.subTest(reason=reason):
+                class SafeGateway(ReadGateway):
+                    def profile(self, _rid):
+                        self.calls.append("profile")
+                        return gateway_value
+                model = Model("现有降级回答")
+                brain, _, _ = self.brain(model, SafeGateway())
+                response = brain.respond(BrainRequest(message="我现在在哪个学校工作？"), "u")
+                diagnostics = response.diagnostics.model_dump()
+                self.assertTrue(diagnostics["profile_gateway_called"])
+                self.assertEqual(diagnostics["profile_gateway_result"], gateway_result)
+                self.assertEqual(diagnostics["profile_current_school_state"], state)
+                self.assertFalse(diagnostics["deterministic_profile_hit"])
+                self.assertIn(reason, diagnostics["profile_reason_codes"])
+                self.assertIn("deterministic_profile_miss", diagnostics["profile_reason_codes"])
+
+    def test_profile_diagnostics_never_serialize_sensitive_data(self):
+        marker_values = ("敏感学校名称", "must-not-leak-token", "Authorization", "prompt", "/Users/private", "https://secret.example")
+        class SafeGateway(ReadGateway):
+            def profile(self, _rid):
+                self.calls.append("profile")
+                return ProfileGatewayResponse(
+                    payload={"fields":{"current_school":{"value":marker_values[0],"status":"candidate","subject":"current_user"}}},
+                    result="success", reason_codes=["profile_request_success"],
+                )
+        response = self.brain(Model("现有降级回答"), SafeGateway())[0].respond(BrainRequest(message="我现在在哪个学校工作？"), "u")
+        serialized = response.diagnostics.model_dump_json()
+        for marker in marker_values:
+            self.assertNotIn(marker, serialized)
 
     def test_current_school_natural_phrasings_share_deterministic_profile_path(self):
         messages = (

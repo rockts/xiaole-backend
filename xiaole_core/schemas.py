@@ -42,6 +42,28 @@ class Diagnostics(StrictModel):
     gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action"]] = Field(default_factory=list)
     latency_ms: int = Field(default=0, ge=0)
     fallback: bool = False
+    profile_gateway_called: bool = False
+    profile_gateway_result: Literal["not_called", "success", "unavailable", "unauthorized", "invalid_response", "missing_fact"] = "not_called"
+    profile_current_school_state: Literal["not_applicable", "ready", "missing", "not_confirmed", "wrong_subject", "invalid"] = "not_applicable"
+    deterministic_profile_hit: bool = False
+    profile_reason_codes: list[Literal[
+        "profile_request_success", "profile_connect_error", "profile_timeout",
+        "profile_http_401", "profile_http_403", "profile_http_404", "profile_http_5xx",
+        "profile_invalid_json", "profile_schema_invalid", "profile_fields_missing",
+        "current_school_missing", "current_school_status_not_confirmed",
+        "current_school_subject_not_current_user", "current_school_value_missing",
+        "current_school_ready", "deterministic_profile_hit", "deterministic_profile_miss",
+    ]] = Field(default_factory=list)
+
+
+class ProfileGatewayResponse(StrictModel):
+    payload: dict[str, Any] = Field(default_factory=dict, exclude=True, repr=False)
+    result: Literal["success", "unavailable", "unauthorized", "invalid_response"]
+    reason_codes: list[Literal[
+        "profile_request_success", "profile_connect_error", "profile_timeout",
+        "profile_http_401", "profile_http_403", "profile_http_404", "profile_http_5xx",
+        "profile_invalid_json", "profile_schema_invalid",
+    ]] = Field(default_factory=list)
 
 
 class MemoryResult(StrictModel):
