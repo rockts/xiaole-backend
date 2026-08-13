@@ -12,7 +12,10 @@ class StrictModel(BaseModel):
 
 class Intent(str, Enum):
     CONVERSATION = "conversation"
-    MEMORY = "memory"
+    KNOWLEDGE = "knowledge"
+    MEMORY = "knowledge"  # Backward-compatible Python alias; API scope is knowledge.
+    STATUS = "status"
+    PLANNING = "planning"
     ACTION = "action"
 
 
@@ -35,7 +38,8 @@ class Source(StrictModel):
 
 class Diagnostics(StrictModel):
     model: str = ""
-    gateway_used: Literal["memory", "action"] | None = None
+    gateway_used: str | None = None
+    gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action"]] = Field(default_factory=list)
     latency_ms: int = Field(default=0, ge=0)
     fallback: bool = False
 

@@ -36,15 +36,16 @@ class ModelRouter:
         try:
             return ModelResult(self.primary.complete(system_prompt, messages, request_id), self.primary_name)
         except ModelError as exc:
+            can_fallback = bool(self.fallback) and (exc.retryable or exc.category == "authentication")
             logger.warning(
                 "model_primary_failed provider=%s category=%s "
                 "request_id=%s fallback=%s",
                 self.primary_name,
                 exc.category,
                 request_id,
-                bool(exc.retryable and self.fallback),
+                can_fallback,
             )
-            if not exc.retryable or not self.fallback:
+            if not can_fallback:
                 raise ModelUnavailable("model service unavailable") from exc
         try:
             return ModelResult(self.fallback.complete(system_prompt, messages, request_id), self.fallback_name, True)
@@ -58,7 +59,7 @@ class ModelRouter:
             raise ModelUnavailable("model service unavailable") from exc
 
     def classify(self, message: str, history: list[dict], request_id: str) -> str:
-        result = self.complete("Return exactly one of: conversation, memory, action.", [*history, {"role":"user","content":message}], request_id)
+        result = self.complete("Return exactly one of: conversation, knowledge, status, planning, action.", [*history, {"role":"user","content":message}], request_id)
         return result.text.strip().lower()
 
 

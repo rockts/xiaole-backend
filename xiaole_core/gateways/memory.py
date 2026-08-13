@@ -38,3 +38,21 @@ class MemoryGateway:
             sources.append(source)
         confidence = "degraded" if (body.get("flags") or {}).get("degraded") else ("grounded" if sources else "no_sources")
         return MemoryResult(answer=body["answer"], sources=sources, confidence=confidence, request_id=request_id)
+
+    def _get(self, path: str, request_id: str) -> dict:
+        headers = {"X-Request-ID": request_id}
+        if self.token: headers["X-KOS-Token"] = self.token
+        try:
+            response = self.transport.get(f"{self.base_url}{path}", headers=headers, timeout=self.timeout)
+            if response.status_code != 200: raise MemoryUnavailable("knowledge system unavailable")
+            body = response.json()
+        except MemoryUnavailable:
+            raise
+        except Exception as exc:
+            raise MemoryUnavailable("knowledge system unavailable") from exc
+        if not isinstance(body, dict): raise MemoryUnavailable("knowledge system returned an invalid response")
+        return body
+
+    def status(self, request_id: str) -> dict: return self._get("/api/v1/status/intelligence", request_id)
+    def knowledge(self, request_id: str) -> dict: return self._get("/api/v1/status/knowledge", request_id)
+    def profile(self, request_id: str) -> dict: return self._get("/api/v1/profile", request_id)

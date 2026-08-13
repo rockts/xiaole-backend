@@ -9,9 +9,9 @@ from xiaole_core.models import (
 
 
 class Provider:
-    def __init__(self, value=None, error=None): self.value, self.error, self.calls = value, error, 0
+    def __init__(self, value=None, error=None): self.value, self.error, self.calls, self.arguments = value, error, 0, []
     def complete(self, *_args, **_kwargs):
-        self.calls += 1
+        self.calls += 1; self.arguments.append((_args, _kwargs))
         if self.error: raise self.error
         return self.value
 
@@ -42,6 +42,22 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(result.text, "fallback answer")
         self.assertTrue(result.fallback)
         self.assertEqual((primary.calls, fallback.calls), (1, 1))
+        self.assertEqual(primary.arguments, fallback.arguments)
+
+    def test_primary_authentication_failure_uses_configured_fallback_with_identical_context(self):
+        prompt = "minimal-profile-context"
+        messages = [{"role": "user", "content": "current question"}]
+        primary = OpenAICompatibleProvider(
+            "https://api.deepseek.com/chat/completions",
+            "configured-but-rejected-key",
+            "deepseek-chat",
+            transport=Transport(Response(401, {"error": {"message": "unauthorized"}})),
+        )
+        fallback = Provider("fallback answer")
+        result = ModelRouter(primary, fallback).complete(prompt, messages, "auth-fallback")
+        self.assertEqual(result.text, "fallback answer")
+        self.assertTrue(result.fallback)
+        self.assertEqual(fallback.arguments[0][0], (prompt, messages, "auth-fallback"))
 
     def test_nonretryable_or_double_failure_is_safe(self):
         fallback = Provider("must not run")

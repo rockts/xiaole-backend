@@ -54,13 +54,13 @@ class BrainTests(unittest.TestCase):
         model=Model()
         response=BrainCore(Context(),model,memory,Gateway()).respond(BrainRequest(message="最近有什么官方通知？"),"alice")
         self.assertEqual(response.answer,"乐知事实")
-        self.assertEqual(response.sources,sources)
+        self.assertEqual(response.sources,[{"title":"原始通知","custom":"complete","provenance":"memory"}])
         self.assertEqual(model.calls,0)
 
     def test_memory_unavailable_is_honest(self):
         response=BrainCore(Context(),Model(),Gateway(error=MemoryUnavailable("down")),Gateway()).respond(BrainRequest(message="最近有什么官方通知？"),"alice")
         self.assertEqual(response.sources,[])
-        self.assertIn("知识系统暂时不可用",response.answer)
+        self.assertIn("没能读取到乐知资料",response.answer)
 
     def test_action_reports_only_gateway_result(self):
         result=ActionResult(task_id="t",status="dead",summary="任务失败",request_id="r")
