@@ -8,6 +8,7 @@ import re
 from .errors import ActionUnavailable, MemoryUnavailable, ModelUnavailable
 from .intent import IntentRouter, is_current_employment_query
 from .schemas import ActionCommand, BrainRequest, BrainResponse, Diagnostics, Intent, ProfileGatewayResponse
+from .safe_diagnostics import Core2SafeDiagnosticsEvent, emit_core2_safe_diagnostics
 
 
 class BrainCore:
@@ -44,11 +45,26 @@ class BrainCore:
                 answer = "模型服务暂时不可用，请稍后再试。"
         self.context.append_exchange(user_id, conversation_id, request.message, answer)
         profile_diagnostics = locals().get("profile_diagnostics", {})
-        return BrainResponse(
+        response = BrainResponse(
             request_id=request_id, conversation_id=conversation_id, intent=decision.intent, answer=answer,
             sources=sources, action=action,
             diagnostics=Diagnostics(model=model, gateway_used=gateway, gateways_used=gateways, latency_ms=max(0,int((time.monotonic()-started)*1000)), fallback=fallback, **profile_diagnostics),
         )
+        diagnostics = response.diagnostics
+        emit_core2_safe_diagnostics(Core2SafeDiagnosticsEvent(
+            request_id=response.request_id,
+            intent=response.intent.value,
+            # This is the intent router reason code, not a data-access or authorization scope.
+            scope=decision.reason_code,
+            gateways_used=list(diagnostics.gateways_used),
+            model_called=bool(diagnostics.model),
+            profile_gateway_called=diagnostics.profile_gateway_called,
+            profile_gateway_result=diagnostics.profile_gateway_result,
+            profile_current_school_state=diagnostics.profile_current_school_state,
+            deterministic_profile_hit=diagnostics.deterministic_profile_hit,
+            profile_reason_codes=list(diagnostics.profile_reason_codes),
+        ))
+        return response
 
     def _read_answer(self, intent, message, history, request_id):
         facts, sources, used, unavailable = {}, [], [], []

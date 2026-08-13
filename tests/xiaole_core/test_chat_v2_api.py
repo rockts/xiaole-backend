@@ -1,4 +1,6 @@
 import unittest
+import json
+import logging
 from datetime import timedelta
 
 from fastapi import FastAPI
@@ -41,6 +43,26 @@ class ApiTests(unittest.TestCase):
         response=self.client.post("/api/v2/chat",headers={"Authorization":f"Bearer {token}"},json={"message":"你好"})
         self.assertEqual(response.status_code,500)
         self.assertNotIn("secret",response.text)
+
+    def test_core_error_emits_one_validation_safe_fallback_event(self):
+        records = []
+        class Handler(logging.Handler):
+            def emit(self, record): records.append(record.getMessage())
+        handler = Handler(); logger = logging.getLogger("xiaole_ai"); logger.addHandler(handler); logger.setLevel(logging.INFO)
+        try:
+            class BrokenBrain:
+                def respond(self, *_): raise RuntimeError("secret prompt token https://private")
+            self.client.app.dependency_overrides[get_brain_core]=lambda:BrokenBrain()
+            token=create_access_token({"sub":ADMIN_USERNAME},timedelta(minutes=5))
+            self.client.post("/api/v2/chat",headers={"Authorization":f"Bearer {token}"},json={"message":"private question"})
+        finally:
+            logger.removeHandler(handler)
+        events = [json.loads(line) for line in records if line.startswith('{"event":"core2_safe_diagnostics"')]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["scope"], "validation_safe_failure")
+        rendered = json.dumps(events, ensure_ascii=False)
+        for marker in ("secret", "prompt", "token", "https://", "private question"):
+            self.assertNotIn(marker, rendered)
 
 
 if __name__ == "__main__": unittest.main()
