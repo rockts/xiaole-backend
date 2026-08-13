@@ -1,6 +1,10 @@
+import importlib
+import sys
 import time
+import types
 import unittest
 from datetime import timedelta
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -61,5 +65,26 @@ class ApiTests(unittest.TestCase):
     def test_valid_jwt_returns_home(self):
         token=create_access_token({"sub":ADMIN_USERNAME},timedelta(minutes=5)); response=self.client.get("/api/v2/home",headers={"Authorization":f"Bearer {token}"})
         self.assertEqual(200,response.status_code); self.assertEqual(1,response.json()["schema_version"])
+
+
+class DependencyConstructionTests(unittest.TestCase):
+    def test_home_dependencies_import_and_service_construction(self):
+        provider = types.ModuleType("dependencies")
+        provider.get_xiaole_agent = lambda: None
+        agent = types.ModuleType("agent")
+
+        sys.modules.pop("xiaole_home.dependencies", None)
+        with patch.dict(sys.modules, {"dependencies": provider, "agent": agent}):
+            home_dependencies = importlib.import_module("xiaole_home.dependencies")
+            home_dependencies.build_home_service.cache_clear()
+            with (
+                patch.object(home_dependencies, "LezhiHomeGateway"),
+                patch.object(home_dependencies, "ActionReadinessGateway"),
+                patch.object(home_dependencies, "HomeCache"),
+            ):
+                service = get_home_service()
+
+            self.assertIsInstance(service, HomeService)
+            home_dependencies.build_home_service.cache_clear()
 
 if __name__ == "__main__": unittest.main()

@@ -1,6 +1,6 @@
 import os
 from functools import lru_cache
-from agent import get_xiaole_agent
+from dependencies import get_xiaole_agent
 from .cache import HomeCache
 from .gateways.action_readiness import ActionReadinessGateway
 from .gateways.lezhi import LezhiHomeGateway
