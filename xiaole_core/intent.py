@@ -3,6 +3,15 @@ from collections.abc import Callable
 from .schemas import Intent, IntentDecision
 
 
+def is_current_employment_query(message: str) -> bool:
+    text = "".join(message.strip().lower().split())
+    current = any(word in text for word in ("现在", "目前", "当前"))
+    school = "学校" in text
+    employment = any(word in text for word in ("工作", "工作单位", "任职", "就职"))
+    location_question = any(word in text for word in ("在哪", "哪里", "哪儿", "是哪", "叫什么"))
+    return location_question and ((current and (school or employment)) or school or (current and employment))
+
+
 class IntentRouter:
     def __init__(self, classifier: Callable | None = None):
         self.classifier = classifier
@@ -15,6 +24,8 @@ class IntentRouter:
             return IntentDecision(intent=Intent.STATUS, reason_code="today_priority")
         if any(word in text for word in ("值得写", "公众号选题", "写什么内容")):
             return IntentDecision(intent=Intent.PLANNING, reason_code="content_ideas")
+        if is_current_employment_query(text):
+            return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="current_employment")
         if any(word in text for word in ("得过奖", "获过奖", "现在在哪", "当前学校", "现在的学校")):
             return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="personal_fact")
         if any(word in text for word in ("官方通知", "官方文件", "知识库", "以前记录", "长期知识")):

@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 
 from xiaole_core.brain import BrainCore
@@ -70,6 +71,39 @@ class RealUseRecoveryTests(unittest.TestCase):
         self.assertEqual(response.answer, "你现在在新华门小学工作。")
         self.assertEqual(read.calls, ["profile"])
 
+    def test_current_school_natural_phrasings_share_deterministic_profile_path(self):
+        messages = (
+            "我现在在哪个学校工作？",
+            "我现在在哪工作？",
+            "我在哪个学校？",
+            "我目前工作单位是哪？",
+            "我现在的学校叫什么？",
+            "我现在任职于哪里？",
+        )
+        for message in messages:
+            with self.subTest(message=message):
+                model = Model("不应调用模型")
+                brain, read, _ = self.brain(model)
+                response = brain.respond(BrainRequest(message=message), "u")
+                self.assertEqual(response.intent.value, "knowledge")
+                self.assertEqual(response.answer, "你现在在新华门小学工作。")
+                self.assertEqual(read.calls, ["profile"])
+                self.assertEqual(model.calls, 0)
+
+    def test_current_school_accepts_confirmed_profile_field_without_historical_override(self):
+        class ProductionProfileGateway(ReadGateway):
+            def profile(self, _rid):
+                return self._value("profile", {
+                    "current_school": {"value": "新华门小学", "status": "confirmed", "subject": "current_user"},
+                    "historical_school": {"value": "烟铺小学", "status": "historical", "subject": "current_user"},
+                })
+        model = Model("烟铺小学")
+        brain, read, _ = self.brain(model, ProductionProfileGateway())
+        response = brain.respond(BrainRequest(message="我目前工作单位是哪？"), "u")
+        self.assertEqual(response.answer, "你现在在新华门小学工作。")
+        self.assertEqual(read.calls, ["profile"])
+        self.assertEqual(model.calls, 0)
+
     def test_achievement_uses_profile_and_personal_memory_with_provenance(self):
         brain, read, _ = self.brain(Model("目前只能确认到科创大赛获奖资料，尚不能确认是你本人获奖还是指导学生获奖。"))
         response = brain.respond(BrainRequest(message="我在科创比赛中得过奖吗？"), "u")
@@ -122,6 +156,50 @@ class RealUseRecoveryTests(unittest.TestCase):
         self.assertNotIn("path", prompt)
         self.assertIn("可确认的资料包含科创大赛获奖通知", prompt)
         self.assertLessEqual(prompt.count('"snippet"'), 5)
+
+    def test_achievement_separates_raw_candidates_model_evidence_and_display_sources(self):
+        class ManySourcesGateway(ReadGateway):
+            def ask(self, question, _context, rid):
+                useful = [
+                    {"title": "科创比赛获奖通知", "snippet": "学生和学校获奖，不能证明用户本人获奖。", "open_url": "/preview/award"},
+                    {"title": "科创比赛获奖通知", "snippet": "重复来源。", "open_url": "/preview/award"},
+                    {"title": "指导学生参赛记录", "snippet": "记录提到指导关系，但主体仍需核验。"},
+                    {"title": "学校科技教育成果", "snippet": "学校层面的成果记录。"},
+                ]
+                garbage = [
+                    {"title": f"{index:03d}", "snippet": "解析碎片"} for index in range(30)
+                ] + [
+                    {"title": "source", "snippet": "技术占位"},
+                    {"title": "attachment-001-scan.pdf", "snippet": "附件碎片"},
+                    {"title": "", "snippet": "无标题碎片"},
+                    {"title": "/Users/private/award.pdf", "snippet": "本地路径"},
+                ]
+                sources = useful + garbage
+                while len(sources) < 47:
+                    sources.append({"title": f"attachment-{len(sources):03d}-part", "snippet": "附件碎片"})
+                return self._value("memory", MemoryResult(
+                    answer="目前只能确认到相关获奖资料，主体证据不足。",
+                    sources=sources,
+                    confidence="grounded",
+                    request_id=rid,
+                ))
+
+        model = Model("目前只能确认到相关资料；你本人、你指导的学生、学校均证据不足。")
+        brain, _, _ = self.brain(model, ManySourcesGateway())
+        response = brain.respond(BrainRequest(message="我在科创比赛中得过奖吗？"), "u")
+        prompt = model.prompts[0][0]
+        titles = [source.get("title", "") for source in response.sources]
+
+        self.assertLessEqual(len(response.sources), 5)
+        self.assertLessEqual(prompt.count('"snippet"'), 5)
+        self.assertEqual(len(titles), len(set(titles)))
+        self.assertFalse(any(re.fullmatch(r"\d+", title) for title in titles))
+        self.assertNotIn("source", [title.lower() for title in titles])
+        self.assertFalse(any(title.lower().startswith("attachment-") for title in titles))
+        self.assertNotRegex(json.dumps(response.sources, ensure_ascii=False), r"/Users/|/Volumes/|file://")
+        self.assertIn("你本人", response.answer)
+        self.assertIn("你指导的学生", response.answer)
+        self.assertIn("学校", response.answer)
 
     def test_deterministic_current_school_bypasses_model_and_historical_field(self):
         model = Model("不应调用")

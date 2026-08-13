@@ -6,7 +6,7 @@ import json
 import re
 
 from .errors import ActionUnavailable, MemoryUnavailable, ModelUnavailable
-from .intent import IntentRouter
+from .intent import IntentRouter, is_current_employment_query
 from .schemas import ActionCommand, BrainRequest, BrainResponse, Diagnostics, Intent
 
 
@@ -51,9 +51,9 @@ class BrainCore:
 
     def _read_answer(self, intent, message, history, request_id):
         facts, sources, used, unavailable = {}, [], [], []
-        personal_fact = any(x in message for x in ("得过奖", "获过奖", "学校", "职业", "身份", "角色"))
+        current_school = is_current_employment_query(message)
+        personal_fact = current_school or any(x in message for x in ("得过奖", "获过奖", "学校", "职业", "身份", "角色"))
         names = {Intent.STATUS: ("status",), Intent.PLANNING: ("profile", "knowledge", "status", "memory"), Intent.KNOWLEDGE: (("profile", "memory") if personal_fact else ("memory",))}[intent]
-        current_school = "学校" in message and any(x in message for x in ("现在", "当前", "工作"))
         if current_school: names = ("profile",)
         for name in names:
             try:
@@ -61,7 +61,7 @@ class BrainCore:
                 facts[name] = self._project(name, value, intent, current_school=current_school); used.append(name)
                 if name == "status" and isinstance(value, dict) and (value.get("recommended_items") or value.get("recommended_today")): used.append("recommendation")
                 if name == "memory":
-                    sources = [dict(x, provenance=x.get("provenance", "memory")) if isinstance(x, dict) else x for x in value.sources]
+                    sources = self._display_sources(value.sources)
                     facts[name] = {"confidence": value.confidence, "evidence_snippets": self._memory_snippets(value)}
             except (MemoryUnavailable, AttributeError): unavailable.append(name)
         if intent == Intent.KNOWLEDGE and not personal_fact:
@@ -95,6 +95,8 @@ class BrainCore:
         if name == "profile":
             allowed = ("current_school",) if current_school else (("education_focus", "stable_interests", "long_term_projects", "long_term_goals") if intent == Intent.PLANNING else ())
             fields = value.get("fields") if isinstance(value.get("fields"), dict) else {}
+            if current_school and "current_school" not in fields and isinstance(value.get("current_school"), dict):
+                fields = {"current_school": value["current_school"]}
             return {"fields": {key: cls._fact(fields[key]) for key in allowed if key in fields}}
         if name == "knowledge":
             recent = value.get("recent_additions") if isinstance(value.get("recent_additions"), dict) else {}
@@ -124,18 +126,46 @@ class BrainCore:
         snippets = []
         summary = cls._safe_text(result.answer, 500)
         if summary: snippets.append({"snippet": summary})
-        keywords = ("科创", "比赛", "获奖", "学生", "学校", "指导")
-        ranked = sorted(
-            (source for source in result.sources if isinstance(source, dict)),
-            key=lambda source: sum(word in (str(source.get("title") or "") + str(source.get("snippet") or source.get("excerpt") or source.get("summary") or "")) for word in keywords),
-            reverse=True,
-        )
-        for source in ranked[:4]:
-            if not isinstance(source, dict): continue
+        for source in cls._ranked_sources(result.sources)[:4]:
             raw = next((source.get(key) for key in ("snippet", "excerpt", "summary") if source.get(key)), "")
             title, snippet = cls._safe_text(source.get("title"), 160), cls._safe_text(raw, 500)
             if title or snippet: snippets.append({key:value for key,value in (("title",title),("snippet",snippet)) if value})
         return snippets
+
+    @classmethod
+    def _display_sources(cls, candidates):
+        result, seen = [], set()
+        for source in cls._ranked_sources(candidates):
+            title = cls._safe_text(source.get("title"), 160)
+            normalized = re.sub(r"\s+", " ", title).strip().casefold()
+            if not title or re.fullmatch(r"\d+", normalized) or normalized == "source" or normalized.startswith("attachment-"):
+                continue
+            if "[redacted]" in title or normalized in seen:
+                continue
+            seen.add(normalized)
+            item = {"title": title, "provenance": source.get("provenance", "memory")}
+            blocked = {"path", "file_path", "open_url", "preview_url", "url", "token", "secret", "password", "authorization"}
+            for key, value in source.items():
+                if key in item or key in blocked or key in ("snippet", "excerpt", "summary"):
+                    continue
+                if isinstance(value, (str, int, float, bool)) and value is not None:
+                    item[key] = cls._safe_text(value, 300) if isinstance(value, str) else value
+            raw = next((source.get(key) for key in ("snippet", "excerpt", "summary") if source.get(key)), "")
+            snippet = cls._safe_text(raw, 500)
+            if snippet: item["snippet"] = snippet
+            result.append(item)
+            if len(result) == 5: break
+        return result
+
+    @classmethod
+    def _ranked_sources(cls, candidates):
+        keywords = ("科创", "比赛", "获奖", "学生", "学校", "指导")
+        rows = [source for source in candidates if isinstance(source, dict)]
+        return sorted(
+            rows,
+            key=lambda source: sum(word in (str(source.get("title") or "") + str(source.get("snippet") or source.get("excerpt") or source.get("summary") or "")) for word in keywords),
+            reverse=True,
+        )
 
     @staticmethod
     def _safe_text(value, limit):
