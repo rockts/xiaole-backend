@@ -9,9 +9,11 @@ from db_setup import SessionLocal
 from .brain import BrainCore
 from .context import CoreContextRepository
 from .gateways.action import ActionGateway
+from .gateways.reminder import ReminderGateway
 from .gateways.memory import MemoryGateway
 from .intent import IntentRouter
 from .models import ModelRouter, OpenAICompatibleProvider
+from .reminders import ReminderOrchestrator
 
 
 @lru_cache(maxsize=1)
@@ -25,5 +27,9 @@ def build_brain_core() -> BrainCore:
     models = ModelRouter(primary, fallback)
     persona = (Path(__file__).with_name("persona.md")).read_text(encoding="utf-8").strip()
     memory = MemoryGateway(os.getenv("LEZHI_MEMORY_URL", "http://127.0.0.1:8765"), os.getenv("LEZHI_MEMORY_TOKEN", ""), float(os.getenv("LEZHI_MEMORY_TIMEOUT_SECONDS", "20")))
-    action = ActionGateway(os.getenv("XIAOKE_ACTION_URL", ""), os.getenv("XIAOKE_API_TOKEN", ""), float(os.getenv("XIAOKE_ACTION_TIMEOUT_SECONDS", "10")))
-    return BrainCore(CoreContextRepository(SessionLocal), models, memory, action, IntentRouter(models.classify), persona)
+    action_url = os.getenv("XIAOKE_ACTION_URL", "")
+    action_token = os.getenv("XIAOKE_API_TOKEN", "")
+    action_timeout = float(os.getenv("XIAOKE_ACTION_TIMEOUT_SECONDS", "10"))
+    action = ActionGateway(action_url, action_token, action_timeout)
+    reminder = ReminderOrchestrator(ReminderGateway(action_url, action_token, action_timeout))
+    return BrainCore(CoreContextRepository(SessionLocal), models, memory, action, IntentRouter(models.classify), persona, reminder_orchestrator=reminder)

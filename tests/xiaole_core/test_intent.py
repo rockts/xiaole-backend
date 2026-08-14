@@ -13,6 +13,12 @@ class IntentRouterTests(unittest.TestCase):
         self.assertEqual(router.classify("我现在在哪个学校工作？", [], "r4").intent, Intent.KNOWLEDGE)
         self.assertEqual(router.classify("给我手机发一条测试通知。", [], "r3").intent, Intent.ACTION)
 
+    def test_routes_unified_reminder_operations_before_generic_action(self):
+        router = IntentRouter()
+        for message in ("创建工作提醒", "查询提醒", "查看提醒 rem-1", "确认启用该提醒", "暂停提醒 rem-1", "取消提醒 rem-1"):
+            with self.subTest(message=message):
+                self.assertEqual(router.classify(message, [], "r").intent, Intent.REMINDER)
+
     def test_ambiguous_message_uses_classifier_without_executing_anything(self):
         calls = []
         router = IntentRouter(lambda message, history, request_id: calls.append(message) or "knowledge")

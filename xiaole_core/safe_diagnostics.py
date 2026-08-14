@@ -15,9 +15,9 @@ class Core2SafeDiagnosticsEvent(StrictModel):
 
     event: Literal["core2_safe_diagnostics"] = "core2_safe_diagnostics"
     request_id: str
-    intent: Literal["conversation", "knowledge", "status", "planning", "action"]
+    intent: Literal["conversation", "knowledge", "status", "planning", "action", "reminder"]
     scope: str
-    gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action"]] = Field(default_factory=list)
+    gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action", "reminder"]] = Field(default_factory=list)
     model_called: bool
     profile_gateway_called: bool
     profile_gateway_result: Literal["not_called", "success", "unavailable", "unauthorized", "invalid_response", "missing_fact"]

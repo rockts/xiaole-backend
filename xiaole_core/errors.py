@@ -14,5 +14,9 @@ class ActionUnavailable(CoreError):
     pass
 
 
+class ReminderUnavailable(CoreError):
+    pass
+
+
 class ModelUnavailable(CoreError):
     pass

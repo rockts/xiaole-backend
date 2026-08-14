@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StrictModel(BaseModel):
@@ -17,6 +17,7 @@ class Intent(str, Enum):
     STATUS = "status"
     PLANNING = "planning"
     ACTION = "action"
+    REMINDER = "reminder"
 
 
 class IntentDecision(StrictModel):
@@ -39,7 +40,7 @@ class Source(StrictModel):
 class Diagnostics(StrictModel):
     model: str = ""
     gateway_used: str | None = None
-    gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action"]] = Field(default_factory=list)
+    gateways_used: list[Literal["profile", "memory", "knowledge", "status", "recommendation", "action", "reminder"]] = Field(default_factory=list)
     latency_ms: int = Field(default=0, ge=0)
     fallback: bool = False
     profile_gateway_called: bool = False
@@ -106,6 +107,40 @@ class ActionResult(StrictModel):
     summary: str
     evidence: dict[str, Any] = Field(default_factory=dict)
     request_id: str
+
+
+class ReminderCreateCommand(StrictModel):
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    title: str = Field(min_length=1, max_length=200)
+    category: Literal["repayment", "work", "daily"]
+    event_at: str
+    notify_at: str
+    amount: str | None = Field(default=None, pattern=r"^\d+(?:\.\d{1,2})?$")
+    notification_title: str = Field(min_length=1, max_length=200)
+    notification_body: str = Field(min_length=1, max_length=5000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("event_at", "notify_at")
+    @classmethod
+    def shanghai_offset_required(cls, value: str) -> str:
+        if not value.endswith("+08:00"):
+            raise ValueError("reminder times must use +08:00")
+        return value
+
+    def action_core_payload(self) -> dict[str, Any]:
+        return {**self.model_dump(), "source_system": "xiaole", "timezone": "Asia/Shanghai", "currency": "CNY"}
+
+
+class ReminderResult(StrictModel):
+    reminder_id: str
+    title: str
+    category: Literal["repayment", "work", "daily"]
+    event_at: str
+    notify_at: str
+    timezone: str
+    status: Literal["draft", "enabled", "processing", "completed", "failed", "paused", "cancelled"]
+    requires_confirmation: bool = False
+    amount: str | None = None
 
 
 class BrainResponse(StrictModel):

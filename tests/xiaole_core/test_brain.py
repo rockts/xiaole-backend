@@ -30,6 +30,13 @@ class Gateway:
     def execute(self, *_): self.calls += 1; return self.result
 
 
+class Reminder:
+    def __init__(self): self.calls=[]
+    def handle(self, message, history, conversation_id, request_id):
+        self.calls.append((message, history, conversation_id, request_id))
+        return type("Outcome", (), {"answer":"提醒已受理但未声称送达"})()
+
+
 class ModelTransport:
     def __init__(self, status_code, payload):
         self.status_code, self.payload, self.calls = status_code, payload, 0
@@ -47,6 +54,16 @@ class BrainTests(unittest.TestCase):
         response = BrainCore(Context(), Model(), memory, action).respond(BrainRequest(message="你好"), "alice")
         self.assertEqual(response.intent.value, "conversation")
         self.assertEqual((memory.calls, action.calls), (0,0))
+
+    def test_reminder_calls_only_reminder_orchestrator(self):
+        memory, action, reminder = Gateway(), Gateway(), Reminder()
+        response = BrainCore(Context(), Model(), memory, action, reminder_orchestrator=reminder).respond(
+            BrainRequest(message="查询提醒"), "alice"
+        )
+        self.assertEqual(response.intent.value, "reminder")
+        self.assertEqual(response.answer, "提醒已受理但未声称送达")
+        self.assertEqual((memory.calls, action.calls, len(reminder.calls)), (0, 0, 1))
+        self.assertEqual(response.diagnostics.gateways_used, ["reminder"])
 
     def test_memory_is_grounded_and_preserves_sources_without_second_generation(self):
         sources=[{"title":"原始通知","custom":"complete"}]

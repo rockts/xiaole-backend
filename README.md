@@ -115,3 +115,16 @@ MIT
 ```
 
 `action` 模式只启动临时小可数据库和本机 Mock Notification 下游，不得用于真实 Bark 验收。
+# 小乐 2.0 统一提醒
+
+`/api/v2/chat` 通过 XiaoKe Action Core 的 `/v1/reminders` 接口管理统一提醒。配置复用 `XIAOKE_ACTION_URL`、`XIAOKE_API_TOKEN` 和 `XIAOKE_ACTION_TIMEOUT_SECONDS`；Token 必须由安全环境注入。
+
+小乐 2.0 不写入旧提醒数据库，不创建定时任务，也不直接调用 Bark。工作和日常提醒可直接启用；含金额还款提醒先创建为 draft，并在用户明确确认后启用。创建成功仅代表 Action Core 已接受或保存提醒，不代表 Bark 已送达。
+
+本地验证：
+
+```bash
+./venv/bin/python -m unittest tests.xiaole_core.test_reminder_gateway tests.xiaole_core.test_reminders tests.xiaole_core.test_reminder_security -v
+```
+
+生产部署继续使用现有 GitHub Actions 镜像构建和 NAS 容器更新流程。部署前验证容器到 Action Core 的网络可达性；回滚时恢复上一版后端镜像。Action Core 中已创建的提醒需通过 Reminder API 单独暂停或取消。

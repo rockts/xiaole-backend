@@ -18,6 +18,8 @@ class IntentRouter:
 
     def classify(self, message: str, history: list[dict], request_id: str) -> IntentDecision:
         text = message.strip().lower()
+        if "提醒" in text and any(word in text for word in ("创建", "查询", "列出", "查看", "详情", "确认", "暂停", "取消", "还款", "工作", "日常")):
+            return IntentDecision(intent=Intent.REMINDER, reason_code="reminder_request")
         if any(word in text for word in ("手机发", "发一条测试通知", "发送测试通知")):
             return IntentDecision(intent=Intent.ACTION, reason_code="notification_request")
         if any(word in text for word in ("今天我最应该关注", "今天最应该关注", "今天有什么值得关注")):

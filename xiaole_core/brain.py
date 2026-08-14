@@ -12,12 +12,13 @@ from .safe_diagnostics import Core2SafeDiagnosticsEvent, emit_core2_safe_diagnos
 
 
 class BrainCore:
-    def __init__(self, context, models, memory_gateway, action_gateway, intent_router=None, persona="你是小乐。", read_gateway=None):
+    def __init__(self, context, models, memory_gateway, action_gateway, intent_router=None, persona="你是小乐。", read_gateway=None, reminder_orchestrator=None):
         self.context, self.models = context, models
         self.memory_gateway, self.action_gateway = memory_gateway, action_gateway
         self.intent_router = intent_router or IntentRouter(getattr(models, "classify", None))
         self.persona = persona
         self.read_gateway = read_gateway or memory_gateway
+        self.reminder_orchestrator = reminder_orchestrator
 
     def respond(self, request: BrainRequest, user_id: str) -> BrainResponse:
         started, request_id = time.monotonic(), str(uuid.uuid4())
@@ -26,7 +27,14 @@ class BrainCore:
         decision = self.intent_router.classify(request.message, history, request_id)
         answer, sources, action = "", [], None
         model, fallback, gateway, gateways = "", False, None, []
-        if decision.intent in (Intent.KNOWLEDGE, Intent.STATUS, Intent.PLANNING):
+        if decision.intent == Intent.REMINDER:
+            gateway = "reminder"
+            gateways = ["reminder"]
+            if self.reminder_orchestrator is None:
+                answer = "提醒服务暂时不可用，请稍后再试。"
+            else:
+                answer = self.reminder_orchestrator.handle(request.message, history, conversation_id, request_id).answer
+        elif decision.intent in (Intent.KNOWLEDGE, Intent.STATUS, Intent.PLANNING):
             answer, sources, model, fallback, gateways, profile_diagnostics = self._read_answer(decision.intent, request.message, history, request_id)
             gateway = gateways[0] if len(gateways) == 1 else None
         elif decision.intent == Intent.ACTION:
