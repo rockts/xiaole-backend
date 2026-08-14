@@ -39,6 +39,35 @@ class ReminderOrchestratorTests(unittest.TestCase):
         self.assertEqual(command.event_at,"2026-08-15T17:00:00+08:00")
         self.assertEqual(command.notify_at,"2026-08-14T16:00:00+08:00")
 
+    def test_natural_question_lists_existing_repayment_reminders(self):
+        gateway=Gateway([result(category="repayment")])
+        outcome=ReminderOrchestrator(gateway).handle("最近是不是有几个还款提醒？",[],"c","r",self.now)
+        self.assertEqual(gateway.calls[0][0], "list")
+        self.assertEqual(gateway.calls[0][1], {"category": "repayment"})
+        for value in (
+            "标题：部署验收", "类别：repayment", "事项时间：2026-08-20 17:00",
+            "提醒时间：2026-08-20 16:00", "状态：enabled", "提醒 ID：rem-1",
+        ):
+            self.assertIn(value, outcome.answer)
+
+    def test_get_shows_complete_reminder_details(self):
+        gateway=Gateway([result()])
+        outcome=ReminderOrchestrator(gateway).handle("查看提醒 rem-1",[],"c","r",self.now)
+        for value in (
+            "标题：部署验收", "类别：work", "事项时间：2026-08-20 17:00",
+            "提醒时间：2026-08-20 16:00", "状态：enabled", "提醒 ID：rem-1",
+        ):
+            self.assertIn(value, outcome.answer)
+
+    def test_short_relative_reminder_uses_same_event_and_bark_time(self):
+        gateway=Gateway([result(category="daily")])
+        outcome=ReminderOrchestrator(gateway).handle("5分钟后用 Bark 提醒我洗完澡",[],"c","r",self.now)
+        command=gateway.calls[0][1]
+        self.assertEqual(command.title, "洗完澡")
+        self.assertEqual(command.event_at, "2026-08-14T10:05:00+08:00")
+        self.assertEqual(command.notify_at, "2026-08-14T10:05:00+08:00")
+        self.assertIn("统一提醒已创建", outcome.answer)
+
     def test_missing_or_ambiguous_date_never_calls_gateway(self):
         for text in ("创建日常提醒：喝水，下午3点提醒", "创建工作提醒：开会，明天"):
             gateway=Gateway(); outcome=ReminderOrchestrator(gateway).handle(text,[],"c","r",self.now)

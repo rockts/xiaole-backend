@@ -19,6 +19,12 @@ class IntentRouterTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(router.classify(message, [], "r").intent, Intent.REMINDER)
 
+    def test_routes_relative_bark_reminder_to_unified_center(self):
+        self.assertEqual(
+            IntentRouter().classify("5分钟后用 Bark 提醒我洗完澡", [], "r").intent,
+            Intent.REMINDER,
+        )
+
     def test_ambiguous_message_uses_classifier_without_executing_anything(self):
         calls = []
         router = IntentRouter(lambda message, history, request_id: calls.append(message) or "knowledge")

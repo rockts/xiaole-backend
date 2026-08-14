@@ -38,8 +38,10 @@ class ReminderOrchestrator:
         if "取消" in text:
             return self._manage("cancel", reminder_id, request_id)
         if any(word in text for word in ("查看", "详情")):
-            return self._manage("get", reminder_id, request_id)
-        if any(word in text for word in ("查询", "列出", "有哪些")):
+            if not reminder_id:
+                return ReminderOutcome("请提供需要操作的精确提醒 ID。")
+            return ReminderOutcome(self._summary(self.gateway.get(reminder_id, request_id)))
+        if any(word in text for word in ("查询", "列出", "有哪些", "有几个", "是不是有")):
             filters = {}
             category = self._category(text, required=False)
             if category:
@@ -99,6 +101,12 @@ class ReminderOrchestrator:
         absolute = cls._absolute_times(text)
         if absolute:
             return absolute
+        duration = re.search(r"(\d{1,4})\s*(分钟|小时)后", text)
+        if duration:
+            value = int(duration.group(1))
+            delta = timedelta(minutes=value) if duration.group(2) == "分钟" else timedelta(hours=value)
+            target = now + delta
+            return [target, target]
         result = []
         for relative, hour, minute in re.findall(r"(今天|明天|后天)\s*(\d{1,2}):(\d{2})", text):
             days = {"今天": 0, "明天": 1, "后天": 2}[relative]
@@ -118,6 +126,8 @@ class ReminderOrchestrator:
     @staticmethod
     def _title(text):
         match = re.search(r"提醒[：:]\s*([^，,；;]+)", text)
+        if not match:
+            match = re.search(r"提醒我\s*([^，,。！？!?；;]+)", text)
         return (match.group(1).strip() if match else "小乐提醒")[:200]
 
     @staticmethod
@@ -137,7 +147,13 @@ class ReminderOrchestrator:
 
     @staticmethod
     def _display(value): return value.astimezone(SHANGHAI).strftime("%Y-%m-%d %H:%M")
-    @staticmethod
-    def _summary(row): return f"提醒 ID：{row.reminder_id}；标题：{row.title}；类别：{row.category}；状态：{row.status}"
+    @classmethod
+    def _summary(cls, row):
+        event_at = datetime.fromisoformat(row.event_at)
+        notify_at = datetime.fromisoformat(row.notify_at)
+        return (
+            f"标题：{row.title}；类别：{row.category}；事项时间：{cls._display(event_at)}；"
+            f"提醒时间：{cls._display(notify_at)}；状态：{row.status}；提醒 ID：{row.reminder_id}"
+        )
     @classmethod
     def _status_answer(cls, row, operation): return f"提醒{operation}结果：提醒 ID：{row.reminder_id}；状态：{row.status}。"
