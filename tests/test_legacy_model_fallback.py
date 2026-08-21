@@ -64,6 +64,16 @@ def build_agent(response):
 
 
 class LegacyModelFallbackTests(unittest.TestCase):
+    def test_short_instructional_greeting_is_simple_chat(self):
+        instance = XiaoLeAgent.__new__(XiaoLeAgent)
+
+        self.assertTrue(instance._is_simple_chat("你好，只回复 OK"))
+
+    def test_tool_request_is_not_simple_chat(self):
+        instance = XiaoLeAgent.__new__(XiaoLeAgent)
+
+        self.assertFalse(instance._is_simple_chat("帮我查一下今天北京的天气"))
+
     def test_nonstream_authentication_failure_falls_back_once(self):
         instance = build_agent(Response(401))
         instance._call_qwen_fallback = Mock(return_value="Qwen answer")

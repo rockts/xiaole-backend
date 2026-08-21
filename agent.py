@@ -881,6 +881,22 @@ class XiaoLeAgent:
         '你真聪明': '哈哈，谢谢夸奖！不过我还在不断学习中～',
     }
 
+    @staticmethod
+    def _is_simple_chat(prompt):
+        simple_chat_patterns = [
+            '你好', '嗨', '哈喽', '早上好', '下午好', '晚上好', '早安', '晚安',
+            '在吗', '在不在', '你在吗', '你在不在', '在干嘛', '干嘛呢',
+            '谢谢', '好的', '知道了', '明白', '嗯', '好', '行', 'ok', 'OK',
+            '再见', '拜拜', '回头见', '下次聊', '晚安',
+            '怎么了', '咋了', '啥事', '有事吗', '什么事',
+            '你是谁', '你叫什么', '你是什么', '你能做什么', '你会什么',
+        ]
+        normalized = (prompt or '').strip()
+        return (
+            len(normalized) <= 10
+            and any(pattern in normalized for pattern in simple_chat_patterns)
+        ) or normalized in simple_chat_patterns
+
     @governed_entrypoint
     def chat(self, prompt, session_id=None, user_id="default_user",
              response_style="balanced", image_path=None,
@@ -959,6 +975,10 @@ class XiaoLeAgent:
             '帮我安排', '帮我计划', '帮我组织'
         ]
         skip_tool_check = any(keyword in prompt for keyword in task_keywords)
+        is_simple_chat = self._is_simple_chat(prompt)
+        if is_simple_chat:
+            skip_tool_check = True
+            logger.info(f"⚡ 简单对话跳过工具意图分析: {prompt}")
 
         if task_result:
             # 如果成功恢复任务，跳过工具调用
@@ -1122,18 +1142,6 @@ class XiaoLeAgent:
         # v0.8.0: 任务识别和执行
         # 如果已经成功执行了工具，且没有明确的任务关键词，则跳过复杂任务识别（避免重复执行）
         # v0.9.6: 性能优化 - 简单消息跳过复杂任务识别
-        simple_chat_patterns = [
-            '你好', '嗨', '哈喽', '早上好', '下午好', '晚上好', '早安', '晚安',
-            '在吗', '在不在', '你在吗', '你在不在', '在干嘛', '干嘛呢',
-            '谢谢', '好的', '知道了', '明白', '嗯', '好', '行', 'ok', 'OK',
-            '再见', '拜拜', '回头见', '下次聊', '晚安',
-            '怎么了', '咋了', '啥事', '有事吗', '什么事',
-            '你是谁', '你叫什么', '你是什么', '你能做什么', '你会什么',
-        ]
-        is_simple_chat = (
-            len(prompt) <= 10 and any(p in prompt for p in simple_chat_patterns)
-        ) or prompt.strip() in simple_chat_patterns
-
         if is_simple_chat:
             logger.info(f"⚡ 简单对话跳过任务识别: {prompt}")
 
