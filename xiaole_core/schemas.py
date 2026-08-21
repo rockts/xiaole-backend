@@ -55,6 +55,17 @@ class Diagnostics(StrictModel):
         "current_school_subject_not_current_user", "current_school_value_missing",
         "current_school_ready", "deterministic_profile_hit", "deterministic_profile_miss",
     ]] = Field(default_factory=list)
+    profile_scope: Literal["not_applicable", "self_profile", "employment_history"] = "not_applicable"
+    admitted_source_categories: list[Literal[
+        "confirmed_profile", "historical_profile", "needs_confirmation", "governed_user_knowledge",
+    ]] = Field(default_factory=list)
+    excluded_source_categories: list[Literal[
+        "legacy", "conversation", "old_schedule", "behavior_pattern", "model_inference",
+    ]] = Field(default_factory=list)
+    renderer: Literal["not_applicable", "deterministic"] = "not_applicable"
+    provenance_categories: list[Literal[
+        "user_confirmed_profile", "historical_profile", "needs_confirmation", "governed_user_knowledge",
+    ]] = Field(default_factory=list)
 
 
 class ProfileGatewayResponse(StrictModel):

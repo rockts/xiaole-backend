@@ -5,12 +5,18 @@ import unittest
 from xiaole_core.brain import BrainCore
 from xiaole_core.errors import MemoryUnavailable
 from xiaole_core.schemas import BrainRequest, MemoryResult, ProfileGatewayResponse
+from tests.xiaole_core.test_self_profile import governed_profile
 
 
 class Context:
     def resolve(self, _user, cid, _message): return cid or "c"
     def history(self, _user, _cid): return []
     def append_exchange(self, *_): pass
+
+
+class LegacyHistoryContext(Context):
+    def history(self, _user, _cid):
+        return [{"role": "assistant", "content": "共享会话Legacy烟铺小学家庭住址饮食旧课程表"}]
 
 
 class Model:
@@ -54,6 +60,75 @@ class RealUseRecoveryTests(unittest.TestCase):
         self.assertEqual(response.diagnostics.gateways_used, ["status", "recommendation"])
         self.assertNotIn("没有实时访问", response.answer)
         self.assertEqual(action.calls, 0)
+
+    def test_self_profile_phrasings_use_only_profile_and_never_model_or_shared_history(self):
+        class ProfileOnlyGateway(ReadGateway):
+            def profile(self, _rid):
+                return self._value("profile", ProfileGatewayResponse(
+                    payload=governed_profile(), result="success", reason_codes=["profile_request_success"]
+                ))
+
+            def ask(self, *_):
+                raise AssertionError("self_profile must not call Memory")
+
+        messages = (
+            "你认识我吗？", "你知道我是谁吗？", "我是谁？", "介绍一下我",
+            "你对我了解多少？", "说说你知道的我", "你记得我什么？",
+        )
+        for message in messages:
+            with self.subTest(message=message):
+                model, read = Model("模型错误回答"), ProfileOnlyGateway()
+                brain = BrainCore(LegacyHistoryContext(), model, read, Action(), read_gateway=read)
+                response = brain.respond(BrainRequest(message=message), "u")
+                self.assertIn("新华门小学", response.answer)
+                for forbidden in ("烟铺小学", "家庭", "住址", "饮食", "旧课程表", "科学", "数学"):
+                    self.assertNotIn(forbidden, response.answer)
+                self.assertEqual(read.calls, ["profile"])
+                self.assertEqual(model.calls, 0)
+                self.assertEqual(response.diagnostics.gateways_used, ["profile"])
+                self.assertEqual(response.diagnostics.profile_scope, "self_profile")
+                self.assertEqual(response.diagnostics.renderer, "deterministic")
+
+    def test_employment_history_is_separate_and_uses_only_historical_profile(self):
+        class ProfileOnlyGateway(ReadGateway):
+            def profile(self, _rid):
+                return self._value("profile", ProfileGatewayResponse(
+                    payload=governed_profile(), result="success", reason_codes=["profile_request_success"]
+                ))
+
+            def ask(self, *_):
+                raise AssertionError("employment_history must not call Memory")
+
+        model, read = Model("模型错误回答"), ProfileOnlyGateway()
+        brain = BrainCore(LegacyHistoryContext(), model, read, Action(), read_gateway=read)
+        response = brain.respond(BrainRequest(message="我以前在哪些学校工作过？"), "u")
+
+        self.assertIn("烟铺小学", response.answer)
+        self.assertIn("历史", response.answer)
+        self.assertNotIn("新华门小学", response.answer)
+        self.assertEqual(read.calls, ["profile"])
+        self.assertEqual(model.calls, 0)
+        self.assertEqual(response.diagnostics.profile_scope, "employment_history")
+
+    def test_self_profile_profile_failure_is_explicit_and_never_falls_back(self):
+        class UnavailableProfile(ReadGateway):
+            def profile(self, _rid):
+                return self._value("profile", ProfileGatewayResponse(
+                    result="unavailable", reason_codes=["profile_timeout"]
+                ))
+
+            def ask(self, *_):
+                raise AssertionError("Profile failure must not call Memory")
+
+        model, read = Model("Legacy猜测"), UnavailableProfile()
+        brain = BrainCore(LegacyHistoryContext(), model, read, Action(), read_gateway=read)
+        response = brain.respond(BrainRequest(message="你认识我吗？"), "u")
+
+        self.assertIn("暂时无法读取", response.answer)
+        self.assertNotIn("Legacy猜测", response.answer)
+        self.assertEqual(read.calls, ["profile"])
+        self.assertEqual(model.calls, 0)
+        self.assertEqual(response.diagnostics.profile_gateway_result, "unavailable")
 
     def test_content_ideas_combine_profile_memory_recent_knowledge(self):
         model = Model("1. AI 教育通知：值得写；依据是近期通知。\n2. 科技教育实践：与长期方向相关。\n3. XiaoLe 实用化：可引用项目资料。")

@@ -9,6 +9,7 @@ from .errors import ActionUnavailable, MemoryUnavailable, ModelUnavailable
 from .intent import IntentRouter, is_current_employment_query
 from .schemas import ActionCommand, BrainRequest, BrainResponse, Diagnostics, Intent, ProfileGatewayResponse
 from .safe_diagnostics import Core2SafeDiagnosticsEvent, emit_core2_safe_diagnostics
+from .self_profile import render_employment_history, render_profile_unavailable, render_self_profile
 
 
 class BrainCore:
@@ -34,6 +35,9 @@ class BrainCore:
                 answer = "提醒服务暂时不可用，请稍后再试。"
             else:
                 answer = self.reminder_orchestrator.handle(request.message, history, conversation_id, request_id).answer
+        elif decision.intent == Intent.KNOWLEDGE and decision.reason_code in ("self_profile", "employment_history"):
+            answer, sources, model, fallback, gateways, profile_diagnostics = self._self_profile_answer(decision.reason_code, request_id)
+            gateway = gateways[0] if len(gateways) == 1 else None
         elif decision.intent in (Intent.KNOWLEDGE, Intent.STATUS, Intent.PLANNING):
             answer, sources, model, fallback, gateways, profile_diagnostics = self._read_answer(decision.intent, request.message, history, request_id)
             gateway = gateways[0] if len(gateways) == 1 else None
@@ -71,8 +75,56 @@ class BrainCore:
             profile_current_school_state=diagnostics.profile_current_school_state,
             deterministic_profile_hit=diagnostics.deterministic_profile_hit,
             profile_reason_codes=list(diagnostics.profile_reason_codes),
+            profile_scope=diagnostics.profile_scope,
+            admitted_source_categories=list(diagnostics.admitted_source_categories),
+            excluded_source_categories=list(diagnostics.excluded_source_categories),
+            renderer=diagnostics.renderer,
+            provenance_categories=list(diagnostics.provenance_categories),
         ))
         return response
+
+    def _self_profile_answer(self, scope, request_id):
+        excluded = ["legacy", "conversation", "old_schedule", "behavior_pattern", "model_inference"]
+        diagnostics = {
+            "profile_gateway_called": True,
+            "profile_gateway_result": "success",
+            "profile_current_school_state": "not_applicable",
+            "deterministic_profile_hit": False,
+            "profile_reason_codes": [],
+            "profile_scope": scope,
+            "excluded_source_categories": excluded,
+            "renderer": "deterministic",
+        }
+        try:
+            value = self.read_gateway.profile(request_id)
+        except (MemoryUnavailable, AttributeError):
+            diagnostics.update(profile_gateway_result="unavailable", profile_reason_codes=["profile_connect_error"])
+            result = render_profile_unavailable(scope)
+            return result.answer, [], "", False, [], diagnostics
+
+        payload = value
+        if isinstance(value, ProfileGatewayResponse):
+            diagnostics.update(profile_gateway_result=value.result, profile_reason_codes=list(value.reason_codes))
+            if value.result != "success":
+                result = render_profile_unavailable(scope)
+                return result.answer, [], "", False, [], diagnostics
+            payload = value.payload
+        else:
+            diagnostics["profile_reason_codes"] = ["profile_request_success"]
+
+        fields = payload.get("fields") if isinstance(payload, dict) else None
+        if not isinstance(fields, dict):
+            diagnostics.update(profile_gateway_result="missing_fact", profile_reason_codes=diagnostics["profile_reason_codes"] + ["profile_fields_missing"])
+            result = render_profile_unavailable(scope)
+            return result.answer, [], "", False, ["profile"], diagnostics
+
+        result = render_self_profile(payload) if scope == "self_profile" else render_employment_history(payload)
+        diagnostics.update(
+            deterministic_profile_hit=bool(result.admitted_sources),
+            admitted_source_categories=list(result.admitted_sources),
+            provenance_categories=list(result.provenance_categories),
+        )
+        return result.answer, [], "", False, ["profile"], diagnostics
 
     def _read_answer(self, intent, message, history, request_id):
         facts, sources, used, unavailable = {}, [], [], []

@@ -5,6 +5,7 @@ import unittest
 from pydantic import ValidationError
 
 from tests.xiaole_core.test_real_use_recovery import Action, Context, Model, ReadGateway
+from tests.xiaole_core.test_self_profile import governed_profile
 from xiaole_core.brain import BrainCore
 from xiaole_core.schemas import BrainRequest, ProfileGatewayResponse
 from xiaole_core.safe_diagnostics import Core2SafeDiagnosticsEvent
@@ -75,6 +76,38 @@ class SafeDiagnosticsPersistenceTests(unittest.TestCase):
                 event = self.events()[0]
                 self.assertEqual(event["profile_gateway_result"], result)
                 self.assertIn(reason, event["profile_reason_codes"])
+
+    def test_self_profile_event_records_only_finite_source_categories(self):
+        markers = ("新华门小学", "烟铺小学", "家庭敏感成员", "共享会话", "private-question")
+
+        class Gateway(ReadGateway):
+            def profile(self, _rid):
+                return ProfileGatewayResponse(
+                    payload=governed_profile(), result="success", reason_codes=["profile_request_success"]
+                )
+
+            def ask(self, *_):
+                raise AssertionError("must not read Memory")
+
+        model = Model("must-not-run")
+        response = self.brain(model, Gateway()).respond(BrainRequest(message="你认识我吗？"), "u")
+        event = self.events()[0]
+
+        self.assertEqual(event["scope"], "self_profile")
+        self.assertEqual(event["profile_scope"], "self_profile")
+        self.assertEqual(event["gateways_used"], ["profile"])
+        self.assertFalse(event["model_called"])
+        self.assertEqual(event["renderer"], "deterministic")
+        self.assertEqual(event["admitted_source_categories"], ["confirmed_profile", "needs_confirmation"])
+        self.assertEqual(event["provenance_categories"], ["user_confirmed_profile", "needs_confirmation"])
+        self.assertEqual(event["excluded_source_categories"], [
+            "legacy", "conversation", "old_schedule", "behavior_pattern", "model_inference",
+        ])
+        serialized = json.dumps(event, ensure_ascii=False)
+        for marker in markers:
+            self.assertNotIn(marker, serialized)
+        self.assertEqual(model.calls, 0)
+        self.assertIn("新华门小学", response.answer)
 
     def test_model_fallback_is_recorded_without_sensitive_content(self):
         markers = ("private-question", "private-school", "Authorization", "token", "https://private", "raw exception", "memory text")

@@ -1,6 +1,28 @@
 from collections.abc import Callable
+import re
 
 from .schemas import Intent, IntentDecision
+
+
+def _normalized(message: str) -> str:
+    return re.sub(r"[\s，。！？、,.!?；;：:]", "", message.strip().lower())
+
+
+def is_employment_history_query(message: str) -> bool:
+    text = _normalized(message)
+    historical = any(word in text for word in ("以前", "过去", "曾经", "历史"))
+    employment = "学校" in text and any(word in text for word in ("工作", "任职", "就职", "教过"))
+    return historical and employment
+
+
+def is_self_profile_query(message: str) -> bool:
+    text = _normalized(message)
+    identity = "我是谁" in text or "知道我是谁" in text
+    familiarity = any(phrase in text for phrase in (
+        "认识我", "对我了解多少", "有多了解我", "知道的我", "记得我什么",
+    ))
+    introduction = text.endswith("介绍一下我") or text.endswith("介绍介绍我")
+    return identity or familiarity or introduction
 
 
 def is_current_employment_query(message: str) -> bool:
@@ -29,8 +51,12 @@ class IntentRouter:
             return IntentDecision(intent=Intent.STATUS, reason_code="today_priority")
         if any(word in text for word in ("值得写", "公众号选题", "写什么内容")):
             return IntentDecision(intent=Intent.PLANNING, reason_code="content_ideas")
+        if is_employment_history_query(text):
+            return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="employment_history")
         if is_current_employment_query(text):
             return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="current_employment")
+        if is_self_profile_query(text):
+            return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="self_profile")
         if any(word in text for word in ("得过奖", "获过奖", "现在在哪", "当前学校", "现在的学校")):
             return IntentDecision(intent=Intent.KNOWLEDGE, reason_code="personal_fact")
         if any(word in text for word in ("官方通知", "官方文件", "知识库", "以前记录", "长期知识")):

@@ -5,6 +5,42 @@ from xiaole_core.schemas import Intent
 
 
 class IntentRouterTests(unittest.TestCase):
+    def test_routes_self_profile_phrase_family_without_model_classifier(self):
+        calls = []
+        router = IntentRouter(lambda *args: calls.append(args) or "conversation")
+        messages = (
+            "你认识我吗？",
+            "你知道我是谁吗？",
+            "我是谁？",
+            "介绍一下我",
+            "你对我了解多少？",
+            "说说你知道的我",
+            "你记得我什么？",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                decision = router.classify(message, [], "self-profile")
+                self.assertEqual(decision.intent, Intent.KNOWLEDGE)
+                self.assertEqual(decision.reason_code, "self_profile")
+        self.assertEqual(calls, [])
+
+    def test_routes_employment_history_separately_from_current_employment(self):
+        router = IntentRouter()
+
+        history = router.classify("我以前在哪些学校工作过？", [], "history")
+        current = router.classify("我现在在哪个学校工作？", [], "current")
+
+        self.assertEqual((history.intent, history.reason_code), (Intent.KNOWLEDGE, "employment_history"))
+        self.assertEqual((current.intent, current.reason_code), (Intent.KNOWLEDGE, "current_employment"))
+
+    def test_self_profile_does_not_capture_specific_personal_fact_questions(self):
+        router = IntentRouter()
+
+        for message in ("你知道我的电话号码吗？", "介绍一下我的学校"):
+            with self.subTest(message=message):
+                self.assertNotEqual(router.classify(message, [], "specific").reason_code, "self_profile")
+
     def test_routes_real_use_recovery_scopes(self):
         router = IntentRouter()
         self.assertEqual(router.classify("今天我最应该关注什么？", [], "r1").intent, Intent.STATUS)
