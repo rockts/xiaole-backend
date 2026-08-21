@@ -342,7 +342,8 @@ class XiaoLeAgent:
             )).text
         except ProviderError as exc:
             if exc.category in {
-                "billing_quota", "rate_limit", "service_unavailable", "transport"
+                "authentication", "billing_quota", "rate_limit",
+                "service_unavailable", "transport"
             }:
                 return self._call_qwen_fallback(system_prompt, user_prompt, max_tokens)
             raise
@@ -553,7 +554,8 @@ class XiaoLeAgent:
                 yield text[offset:offset + 32]
         except ProviderError as exc:
             if exc.category in {
-                "billing_quota", "rate_limit", "service_unavailable", "transport"
+                "authentication", "billing_quota", "rate_limit",
+                "service_unavailable", "transport"
             }:
                 yield from self._call_qwen_stream_fallback(
                     system_prompt, messages, response_style
@@ -2727,7 +2729,8 @@ class XiaoLeAgent:
             )).text
         except ProviderError as exc:
             if exc.category in {
-                "billing_quota", "rate_limit", "service_unavailable", "transport"
+                "authentication", "billing_quota", "rate_limit",
+                "service_unavailable", "transport"
             }:
                 return self._call_qwen_with_history_fallback(
                     system_prompt, messages, response_style

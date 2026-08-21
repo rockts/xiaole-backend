@@ -64,6 +64,46 @@ def build_agent(response):
 
 
 class LegacyModelFallbackTests(unittest.TestCase):
+    def test_nonstream_authentication_failure_falls_back_once(self):
+        instance = build_agent(Response(401))
+        instance._call_qwen_fallback = Mock(return_value="Qwen answer")
+
+        result = instance._call_deepseek("system", "message")
+
+        self.assertEqual(result, "Qwen answer")
+        self.assertEqual(instance._http_session.calls, 1)
+        instance._call_qwen_fallback.assert_called_once_with(
+            "system", "message", 512
+        )
+
+    def test_history_authentication_failure_falls_back_once(self):
+        instance = build_agent(Response(401))
+        instance._call_qwen_with_history_fallback = Mock(
+            return_value="Qwen history answer"
+        )
+
+        result = instance._call_deepseek_with_history(
+            "system", [{"role": "user", "content": "message"}]
+        )
+
+        self.assertEqual(result, "Qwen history answer")
+        self.assertEqual(instance._http_session.calls, 1)
+        instance._call_qwen_with_history_fallback.assert_called_once()
+
+    def test_stream_authentication_failure_falls_back_once(self):
+        instance = build_agent(Response(401))
+        instance._call_qwen_stream_fallback = Mock(
+            return_value=iter(["Qwen ", "stream"])
+        )
+
+        result = list(instance._call_deepseek_stream(
+            "system", [{"role": "user", "content": "message"}]
+        ))
+
+        self.assertEqual(result, ["Qwen ", "stream"])
+        self.assertEqual(instance._http_session.calls, 1)
+        instance._call_qwen_stream_fallback.assert_called_once()
+
     def test_nonstream_billing_402_falls_back_once(self):
         instance = build_agent(Response(402))
         instance._call_qwen_fallback = Mock(return_value="Qwen answer")
