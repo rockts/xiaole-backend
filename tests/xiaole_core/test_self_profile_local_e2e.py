@@ -8,13 +8,13 @@ class SelfProfileLocalE2ETests(unittest.TestCase):
         report = run_acceptance()
 
         self.assertTrue(report["passed"], report["failures"])
-        self.assertEqual(report["self_profile_questions"], 7)
+        self.assertEqual(report["self_profile_questions"], 8)
         self.assertTrue(report["employment_history_passed"])
         self.assertTrue(report["profile_failure_passed"])
         self.assertEqual(report["model_calls"], 0)
         self.assertEqual(report["memory_calls"], 0)
         self.assertEqual(report["action_calls"], 0)
-        self.assertEqual(report["diagnostic_events"], 9)
+        self.assertEqual(report["diagnostic_events"], 10)
 
 
 if __name__ == "__main__":

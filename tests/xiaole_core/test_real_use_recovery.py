@@ -74,6 +74,7 @@ class RealUseRecoveryTests(unittest.TestCase):
         messages = (
             "你认识我吗？", "你知道我是谁吗？", "我是谁？", "介绍一下我",
             "你对我了解多少？", "说说你知道的我", "你记得我什么？",
+            "我对你来说是什么样的人？",
         )
         for message in messages:
             with self.subTest(message=message):

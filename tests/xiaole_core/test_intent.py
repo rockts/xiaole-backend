@@ -41,6 +41,16 @@ class IntentRouterTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertNotEqual(router.classify(message, [], "specific").reason_code, "self_profile")
 
+    def test_routes_relational_self_description_into_self_profile_without_classifier(self):
+        calls = []
+        router = IntentRouter(lambda *args: calls.append(args) or "conversation")
+
+        decision = router.classify("我对你来说是什么样的人？", [], "relational-profile")
+
+        self.assertEqual(decision.intent, Intent.KNOWLEDGE)
+        self.assertEqual(decision.reason_code, "self_profile")
+        self.assertEqual(calls, [])
+
     def test_routes_real_use_recovery_scopes(self):
         router = IntentRouter()
         self.assertEqual(router.classify("今天我最应该关注什么？", [], "r1").intent, Intent.STATUS)

@@ -22,7 +22,10 @@ def is_self_profile_query(message: str) -> bool:
         "认识我", "对我了解多少", "有多了解我", "知道的我", "记得我什么",
     ))
     introduction = text.endswith("介绍一下我") or text.endswith("介绍介绍我")
-    return identity or familiarity or introduction
+    relational_description = "我对你来说" in text and any(
+        phrase in text for phrase in ("什么样的人", "怎样的人", "怎么样的人")
+    )
+    return identity or familiarity or introduction or relational_description
 
 
 def is_current_employment_query(message: str) -> bool:
