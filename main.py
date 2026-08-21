@@ -11,7 +11,7 @@ from routers import (
     tools, analytics, documents, voice,
     schedule, feedback, faces, dashboard, vision
 )
-from routers import chat_v2, home_v2
+from routers import chat_v2, home_v2, knowledge_profile
 from dependencies import (
     get_scheduler, get_xiaole_agent
 )
@@ -209,6 +209,7 @@ app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
 app.include_router(vision.router, prefix="/api", tags=["vision"])
 app.include_router(chat_v2.router, prefix="/api", tags=["chat-v2"])
 app.include_router(home_v2.router, prefix="/api", tags=["home-v2"])
+app.include_router(knowledge_profile.router, prefix="/api", tags=["knowledge-profile"])
 
 # 同时注册无前缀版本（开发环境兼容）
 app.include_router(auth.router, tags=["auth"])
