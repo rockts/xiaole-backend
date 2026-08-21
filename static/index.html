@@ -78,14 +78,6 @@
                             </svg></span>
                         <span>记忆</span>
                     </div>
-                    <div class="nav-item" data-tab="reminders">
-                        <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                            </svg></span>
-                        <span>提醒</span>
-                    </div>
                     <div class="nav-item" data-tab="tasks">
                         <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -407,50 +399,6 @@
                 </div>
             </div>
 
-            <!-- 提醒管理 v0.5.0 -->
-            <div id="reminders" class="tab-content">
-                <div class="memory-container">
-                    <div class="card stats-card">
-                        <h3>🔔 提醒管理 <span style="font-size: 12px; color: #667eea; font-weight: normal;">v0.5.0
-                                Active Perception层</span></h3>
-
-                        <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                            <button data-action="reminders-refresh"
-                                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                                🔄 刷新
-                            </button>
-                            <button data-action="reminder-create"
-                                style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                                ➕ 创建提醒
-                            </button>
-                            <button data-action="reminder-toggle-expired"
-                                style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                                <span id="toggleExpiredBtn">👁️ 显示已过期</span>
-                            </button>
-                            <button data-action="reminder-check"
-                                style="padding: 10px 20px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                                🔍 立即检查
-                            </button>
-                        </div>
-
-                        <!-- 统计信息 -->
-                        <div id="reminderStats" style="margin: 15px 0; display: flex; gap: 15px; font-size: 13px;">
-                            <span style="color: #10b981;">✅ 活跃: <strong id="activeCount">0</strong></span>
-                            <span style="color: #999;">⏸️ 已禁用: <strong id="disabledCount">0</strong></span>
-                            <span style="color: #f59e0b;">📜 已触发: <strong id="triggeredCount">0</strong></span>
-                        </div>
-
-                        <!-- 提醒列表（合并版） -->
-                        <div style="margin: 20px 0;">
-                            <div id="remindersList"
-                                style="background: #f8f9fa; padding: 15px; border-radius: 10px; min-height: 200px;">
-                                <div class="loading">点击"刷新"加载提醒</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- 文档总结 v0.8.0 Phase 3 -->
             <div id="documents" class="tab-content">
                 <div class="memory-container">
@@ -675,17 +623,6 @@
                                 </label>
                             </div>
 
-                            <div class="setting-item">
-                                <div class="setting-label">
-                                    <span class="setting-name">提醒通知</span>
-                                    <span class="setting-desc">启用提醒弹窗通知</span>
-                                </div>
-                                <label class="setting-switch">
-                                    <input type="checkbox" id="reminderNotifications" checked
-                                        data-setting-change="toggleReminderNotifications">
-                                    <span class="switch-slider"></span>
-                                </label>
-                            </div>
                         </div>
 
                         <!-- v0.8.0 语音设置 -->

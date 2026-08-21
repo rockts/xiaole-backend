@@ -7,13 +7,13 @@ import os
 import traceback
 
 from routers import (
-    auth, chat, memories, reminders, tasks,
+    auth, chat, memories, tasks,
     tools, analytics, documents, voice,
     schedule, feedback, faces, dashboard, vision
 )
 from routers import chat_v2, home_v2
 from dependencies import (
-    get_reminder_manager, get_scheduler, get_xiaole_agent
+    get_scheduler, get_xiaole_agent
 )
 from config import STATIC_DIR, UPLOADS_DIR, FILES_DIR
 from logger import logger
@@ -157,19 +157,16 @@ websocket_manager = ConnectionManager()
 @app.on_event("startup")
 async def startup_event():
     """应用启动时初始化"""
-    # 设置ReminderManager的WebSocket推送回调
-    reminder_manager = get_reminder_manager(websocket_manager.broadcast)
-
-    # 设置事件循环，使 ReminderManager 可以在后台线程中推送 WebSocket 消息
+    # 启动共享后台调度器（旧提醒任务已退役）
     import asyncio
-    loop = asyncio.get_event_loop()
-    reminder_manager.set_loop(loop)
 
-    # 启动提醒调度器
     scheduler = get_scheduler()
+    scheduler.configure_websocket(
+        websocket_manager.broadcast,
+        asyncio.get_running_loop(),
+    )
     scheduler.start()
-    logger.info("✅ 提醒调度器已启动")
-    logger.info("✅ WebSocket推送已配置")
+    logger.info("✅ 后台调度器已启动")
 
 
 @app.on_event("shutdown")
@@ -177,12 +174,12 @@ async def shutdown_event():
     """应用关闭时清理"""
     scheduler = get_scheduler()
     scheduler.stop()
-    logger.info("👋 提醒调度器已停止")
+    logger.info("👋 后台调度器已停止")
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket端点，用于实时推送提醒"""
+    """通用 WebSocket 端点。"""
     await websocket_manager.connect(websocket)
     try:
         while True:
@@ -200,7 +197,6 @@ async def websocket_endpoint(websocket: WebSocket):
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(memories.router, prefix="/api", tags=["memory"])
-app.include_router(reminders.router, prefix="/api", tags=["reminders"])
 app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 app.include_router(tools.router, prefix="/api", tags=["tools"])
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
@@ -218,7 +214,6 @@ app.include_router(home_v2.router, prefix="/api", tags=["home-v2"])
 app.include_router(auth.router, tags=["auth"])
 app.include_router(chat.router, tags=["chat"])
 app.include_router(memories.router, tags=["memory"])
-app.include_router(reminders.router, tags=["reminders"])
 app.include_router(tasks.router, tags=["tasks"])
 app.include_router(tools.router, tags=["tools"])
 app.include_router(analytics.router, tags=["analytics"])

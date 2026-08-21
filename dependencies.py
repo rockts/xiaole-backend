@@ -1,7 +1,6 @@
 from agent import XiaoLeAgent
 from modules.conflict_detector import ConflictDetector
 from modules.proactive_qa import ProactiveQA
-from modules.reminder_manager import get_reminder_manager
 from scheduler import get_scheduler
 from modules.task_manager import get_task_manager
 
@@ -33,6 +32,5 @@ def get_proactive_qa() -> ProactiveQA:
 
 
 # Re-export others for consistency
-get_reminder_manager = get_reminder_manager
 get_scheduler = get_scheduler
 get_task_manager = get_task_manager

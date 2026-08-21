@@ -19,10 +19,6 @@ else:
     os.environ["DATABASE_URL"] = original_database_url
 
 
-class ReminderManagerStub:
-    websocket_callback = None
-
-
 class LeaseStub:
     def __init__(self, decisions=None):
         self.decisions = list(decisions or [True])
@@ -67,7 +63,8 @@ class SchedulerMemoryCompatibilityTests(unittest.TestCase):
     def test_hourly_scheduler_job_accepts_legacy_memory_schema(self):
         scheduler = ReminderScheduler.__new__(ReminderScheduler)
         scheduler.proactive_chat = ProactiveChat()
-        scheduler.reminder_manager = ReminderManagerStub()
+        scheduler.websocket_broadcast = None
+        scheduler.event_loop = None
         scheduler.llm_gateway = LeaseStub()
         error_log = Mock()
 

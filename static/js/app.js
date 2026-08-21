@@ -7,7 +7,6 @@ import {
     toggleShortcutHints,
     updateResponseStyle,
     toggleProactiveQA,
-    toggleReminderNotifications,
     resetSettings
 } from './modules/theme.js';
 import {
@@ -43,14 +42,10 @@ import {
     deleteMemory
 } from './modules/memory.js';
 import {
-    initRemindersTasks,
-    loadReminders,
-    toggleExpiredReminders,
-    showCreateReminderDialog,
-    checkReminders,
+    initTasks,
     loadTasks,
     showCreateTaskDialog
-} from './modules/reminders_tasks.js';
+} from './modules/tasks.js';
 import {
     initDocuments,
     loadDocuments,
@@ -87,7 +82,6 @@ window.toggleKeyboardShortcuts = toggleKeyboardShortcuts;
 window.toggleShortcutHints = toggleShortcutHints;
 window.updateResponseStyle = updateResponseStyle;
 window.toggleProactiveQA = toggleProactiveQA;
-window.toggleReminderNotifications = toggleReminderNotifications;
 window.resetSettings = resetSettings;
 window.toggleSidebar = toggleSidebar;
 window.toggleSidebarCollapse = toggleSidebarCollapse;
@@ -109,10 +103,6 @@ window.searchMemories = searchMemories;
 window.semanticSearch = semanticSearch;
 window.editMemory = editMemory;
 window.deleteMemory = deleteMemory;
-window.loadReminders = loadReminders;
-window.toggleExpiredReminders = toggleExpiredReminders;
-window.showCreateReminderDialog = showCreateReminderDialog;
-window.checkReminders = checkReminders;
 window.loadTasks = loadTasks;
 window.showCreateTaskDialog = showCreateTaskDialog;
 window.loadDocuments = loadDocuments;
@@ -143,7 +133,7 @@ function initApp() {
     initComposer();
     initChatControls();
     initMemory();
-    initRemindersTasks();
+    initTasks();
     initDocuments();
     initSchedule();
     initTools();

@@ -159,7 +159,7 @@ class XiaoLeAgent:
         try:
             from tools import (
                 weather_tool, system_info_tool,
-                time_tool, calculator_tool, reminder_tool,
+                time_tool, calculator_tool,
                 search_tool, file_tool, delete_memory_tool,
                 task_tool, vision_tool, register_face_tool
             )
@@ -169,7 +169,6 @@ class XiaoLeAgent:
             self.tool_registry.register(system_info_tool)
             self.tool_registry.register(time_tool)
             self.tool_registry.register(calculator_tool)
-            self.tool_registry.register(reminder_tool)  # v0.5.0 提醒工具
             self.tool_registry.register(search_tool)  # v0.5.0 搜索工具
             self.tool_registry.register(file_tool)  # v0.5.0 文件工具
             self.tool_registry.register(delete_memory_tool)  # v0.8.1 删除记忆
@@ -932,18 +931,6 @@ class XiaoLeAgent:
         else:
             logger.info(f"📖 使用现有会话: {session_id}")
 
-        # v0.5.0: 检查未读提醒 (仅在有相关关键词时执行)
-        pending_reminders = []
-        reminder_keywords = ['提醒', 'remind', '任务', 'task', '待办']
-        if any(kw in prompt.lower() for kw in reminder_keywords):
-            try:
-                from modules.reminder_manager import get_reminder_manager
-                reminder_mgr = get_reminder_manager()
-                pending_reminders = reminder_mgr.get_pending_reminders(
-                    user_id, limit=3)
-                logger.info(f"⏰ 检查提醒耗时: {time.time() - start_time:.2f}s")
-            except Exception as e:
-                logger.warning(f"检查提醒失败: {e}")
 
         # 获取对话历史
         history = self.conversation.get_history(session_id, limit=5)
@@ -1308,10 +1295,6 @@ class XiaoLeAgent:
         except Exception as e:
             logger.warning(f"对话质量增强失败: {e}")
 
-        # v0.5.0: 如果有未读提醒，在回复前插入提醒
-        if pending_reminders:
-            reminder_text = self._format_reminders(pending_reminders)
-            reply = reminder_text + "\n\n" + reply
 
         # 保存助手回复到会话表
         assistant_msg_id = self.conversation.add_message(
@@ -1793,96 +1776,10 @@ class XiaoLeAgent:
             # 需要AI解析时间和内容，返回None让AI处理
             return None
 
-        # 5.5 查询/删除提醒 - 快速匹配
+        # 5.5 旧版对话不再执行提醒操作；统一提醒仅由 Core 2 处理。
         query_keywords = [
             '查询', '查看', '我的', '有哪些', '列出'
         ]
-        if any(kw in prompt_lower for kw in query_keywords):
-            if '提醒' in prompt_lower or '闹钟' in prompt_lower:
-                return {
-                    "needs_tool": True,
-                    "tool_name": "reminder",
-                    "parameters": {"operation": "list", "status": "active"}
-                }
-
-        # 删除提醒
-        if '删除' in prompt_lower and (
-            '提醒' in prompt_lower or '闹钟' in prompt_lower
-        ):
-            import re
-            # 提取提醒ID - 支持多种格式
-            # 1. "删除ID为70的提醒" -> 70
-            # 2. "删除提醒70" -> 70
-            # 3. "删除编号70的提醒" -> 70
-            id_match = (
-                re.search(r'id[为是：:]*(\d+)', prompt_lower) or
-                re.search(r'编号[为是：:]*(\d+)', prompt_lower) or
-                re.search(r'(?:提醒|闹钟)[^\d]*?(\d+)', prompt) or
-                re.search(r'(\d+)(?:号|个)?(?:提醒|闹钟)', prompt)
-            )
-            if id_match:
-                reminder_id = int(id_match.group(1))
-                logger.info(
-                    f"✅ 快速匹配删除提醒: ID={reminder_id}, "
-                    f"prompt='{prompt[:50]}'"
-                )
-                return {
-                    "needs_tool": True,
-                    "tool_name": "reminder",
-                    "parameters": {
-                        "operation": "delete",
-                        "reminder_id": reminder_id
-                    }
-                }
-            # 处理"删除这个/那个/所有提醒"等指代性表达
-            elif any(
-                ref in prompt_lower
-                for ref in ['这个', '那个', '刚才', '上面', '所有', '全部', '全删']
-            ):
-                # 特殊处理：查询当前提醒数量
-                # 如果只有1个，直接返回删除指令
-                # 如果有多个，让AI列出让用户选择
-                logger.info(f"🔍 指代性删除提醒: '{prompt[:50]}'")
-
-                # 同步查询当前提醒数量
-                try:
-                    from modules.reminder_manager import get_reminder_manager
-                    mgr = get_reminder_manager()
-
-                    # ReminderManager是同步方法，直接调用
-                    reminders = mgr.get_user_reminders(
-                        user_id="default_user",
-                        enabled_only=True
-                    )
-
-                    if len(reminders) == 1:
-                        # 只有1个提醒，直接删除
-                        reminder_id = reminders[0]['reminder_id']
-                        logger.info(
-                            f"✅ 只有1个提醒，直接删除: ID={reminder_id}"
-                        )
-                        return {
-                            "needs_tool": True,
-                            "tool_name": "reminder",
-                            "parameters": {
-                                "operation": "delete",
-                                "reminder_id": reminder_id
-                            }
-                        }
-                    else:
-                        # 多个提醒，让AI列出让用户选择
-                        logger.info(
-                            f"⚠️ 有{len(reminders)}个提醒，转交AI处理"
-                        )
-                        return None
-                except Exception as e:
-                    logger.warning(f"⚠️ 查询提醒失败: {e}")
-                    return None  # 出错时让AI处理
-            else:
-                logger.warning(
-                    f"⚠️ 删除提醒但未找到ID: '{prompt}'"
-                )
-
         # 5.6 查询/删除任务 - 快速匹配
         if any(kw in prompt_lower for kw in query_keywords):
             if '任务' in prompt_lower or '待办' in prompt_lower:

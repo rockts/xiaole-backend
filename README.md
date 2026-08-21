@@ -49,7 +49,7 @@ docker run -d -p 8000:8000 --env-file .env xiaole-backend
 - `GET /memory/{user_id}` - 获取记忆
 - `GET /documents/users/{user_id}` - 获取文档
 - `GET /tasks/users/{user_id}` - 获取任务
-- `GET /reminders/users/{user_id}` - 获取提醒
+- 统一提醒由小乐 2.0 通过 Action Core 提供；旧网页提醒 API 已退役
 
 ## 🏗️ 项目结构
 

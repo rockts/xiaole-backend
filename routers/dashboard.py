@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
 from dependencies import (
-    get_xiaole_agent, get_reminder_manager, get_task_manager
+    get_xiaole_agent, get_task_manager
 )
 from agent import XiaoLeAgent
-from modules.reminder_manager import ReminderManager
 from modules.task_manager import TaskManager
 from auth import get_current_user
 import psutil
@@ -20,10 +19,6 @@ def get_agent():
     return get_xiaole_agent()
 
 
-def get_reminders():
-    return get_reminder_manager()
-
-
 def get_tasks():
     return get_task_manager()
 
@@ -32,7 +27,6 @@ def get_tasks():
 def get_dashboard_snapshot(
     current_user: str = Depends(get_current_user),
     agent: XiaoLeAgent = Depends(get_agent),
-    reminder_mgr: ReminderManager = Depends(get_reminders),
     task_mgr: TaskManager = Depends(get_tasks)
 ):
     """获取仪表盘快照数据"""
@@ -45,23 +39,16 @@ def get_dashboard_snapshot(
             "disk_percent": psutil.disk_usage('/').percent
         }
 
-        # 2. 获取提醒概览
-        reminders = reminder_mgr.get_user_reminders(user_id, enabled_only=True)
-
-        # 3. 获取任务统计
+        # 2. 获取任务统计
         task_stats = task_mgr.get_task_statistics(user_id)
 
-        # 4. 获取最近会话
+        # 3. 获取最近会话
         recent_sessions = agent.conversation.get_recent_sessions(
             user_id, limit=5)
 
         return {
             "success": True,
             "system": system_status,
-            "reminders": {
-                "count": len(reminders),
-                "items": reminders[:5]
-            },
             "tasks": task_stats,
             "recent_sessions": recent_sessions,
             "agent_status": "online"

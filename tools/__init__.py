@@ -5,15 +5,11 @@
 """
 from .weather_tool import weather_tool
 from .system_tool import system_info_tool, time_tool, calculator_tool
-from .reminder_tool import ReminderTool
 from .search_tool import search_tool
 from .file_tool import file_tool
 from .delete_memory_tool import DeleteMemoryTool
 from .task_tool import TaskTool
 from .vision_tool import VisionTool, RegisterFaceTool
-
-# 创建提醒工具实例
-reminder_tool = ReminderTool()
 
 # 创建删除记忆工具实例
 delete_memory_tool = DeleteMemoryTool()
@@ -31,7 +27,6 @@ __all__ = [
     'system_info_tool',
     'time_tool',
     'calculator_tool',
-    'reminder_tool',
     'search_tool',
     'file_tool',
     'delete_memory_tool',

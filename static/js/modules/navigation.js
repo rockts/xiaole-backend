@@ -105,7 +105,6 @@ export function switchTab(tabName, event) {
         chat: '对话',
         sessions: '历史对话',
         memory: '记忆',
-        reminders: '提醒',
         tasks: '任务',
         documents: '文档',
         schedule: '课程表',
@@ -135,10 +134,6 @@ export function switchTab(tabName, event) {
         const statusFilter = document.getElementById('taskStatusFilter');
         if (statusFilter) statusFilter.value = 'pending';
         loadTasks();
-    }
-    if (tabName === 'reminders') {
-        if (typeof loadReminders === 'function') loadReminders();
-        if (typeof loadReminderHistory === 'function') loadReminderHistory();
     }
     if (tabName === 'documents' && typeof loadDocuments === 'function') loadDocuments();
     if (tabName === 'tools') {

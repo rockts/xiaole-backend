@@ -35,9 +35,6 @@ export function initTheme() {
                 case 'toggleProactiveQA':
                     toggleProactiveQA(target.checked);
                     break;
-                case 'toggleReminderNotifications':
-                    toggleReminderNotifications(target.checked);
-                    break;
                 default:
                     break;
             }
@@ -62,9 +59,6 @@ export function applyInitialSettings() {
 
     const proactiveToggle = document.getElementById('proactiveQA');
     if (proactiveToggle) proactiveToggle.checked = settings.proactiveQA;
-
-    const reminderToggle = document.getElementById('reminderNotifications');
-    if (reminderToggle) reminderToggle.checked = settings.reminderNotifications;
 
     if (settings.shortcutHintsEnabled) {
         showShortcutHints();
@@ -148,8 +142,7 @@ const DEFAULT_SETTINGS = {
     keyboardShortcuts: true,
     shortcutHintsEnabled: true,
     responseStyle: 'balanced',
-    proactiveQA: true,
-    reminderNotifications: true
+    proactiveQA: true
 };
 
 export function getSettings() {
@@ -213,13 +206,6 @@ export function toggleProactiveQA(enabled) {
     settings.proactiveQA = enabled;
     saveSettings(settings);
     showToast(enabled ? '✅ 主动问答提示已启用' : '⚠️ 主动问答提示已禁用', enabled ? 'success' : 'warning');
-}
-
-export function toggleReminderNotifications(enabled) {
-    const settings = getSettings();
-    settings.reminderNotifications = enabled;
-    saveSettings(settings);
-    showToast(enabled ? '✅ 提醒通知已启用' : '⚠️ 提醒通知已禁用', enabled ? 'success' : 'warning');
 }
 
 export function resetSettings() {

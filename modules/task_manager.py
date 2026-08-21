@@ -272,14 +272,24 @@ class TaskManager:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            # 1. 获取任务所属用户ID (用于清除提醒缓存)
+            # 旧提醒数据处于保留期，禁止通过任务外键级联删除。
             cursor.execute(
-                "SELECT user_id FROM tasks WHERE id = %s", (task_id,)
+                "SELECT EXISTS("
+                "SELECT 1 FROM reminders WHERE task_id = %s"
+                ")",
+                (task_id,)
             )
-            result = cursor.fetchone()
-            user_id = result[0] if result else None
+            has_legacy_reminders = bool(cursor.fetchone()[0])
+            if has_legacy_reminders:
+                cursor.close()
+                conn.close()
+                logger.warning(
+                    "拒绝删除任务 %s：存在关联的只读旧提醒，需要单独人工授权",
+                    task_id,
+                )
+                return False
 
-            # 2. 删除任务
+            # 删除任务
             # 由于设置了ON DELETE CASCADE，删除任务会自动删除步骤和子任务
             # 也会自动删除关联的 reminders (如果有外键约束)
             cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
@@ -287,20 +297,6 @@ class TaskManager:
             conn.commit()
             cursor.close()
             conn.close()
-
-            # 3. 清除提醒缓存 (如果存在关联提醒被级联删除)
-            if user_id:
-                try:
-                    # 延迟导入避免循环依赖
-                    from modules.reminder_manager import get_reminder_manager
-                    reminder_mgr = get_reminder_manager()
-                    # 这是一个私有方法，但为了保持一致性我们需要调用它
-                    # 或者我们可以添加一个公共方法 clear_cache(user_id)
-                    if hasattr(reminder_mgr, '_clear_user_cache'):
-                        reminder_mgr._clear_user_cache(user_id)
-                        logger.info(f"🧹 已清除用户 {user_id} 的提醒缓存 (因任务删除)")
-                except Exception as e:
-                    logger.warning(f"清除提醒缓存失败: {e}")
 
             logger.info(f"🗑️ 删除任务成功: ID={task_id}")
             return True
