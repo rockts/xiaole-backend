@@ -91,18 +91,26 @@ async def upload_document(
                 doc_id, content, len(chunks)
             )
 
+            def governed_document_call(system_prompt, user_prompt, max_tokens=512):
+                return agent._call_deepseek(
+                    system_prompt, user_prompt, max_tokens=max_tokens,
+                    caller="legacy.document_summary",
+                    request_id=f"document:{doc_id}",
+                    task_id=f"document:{doc_id}",
+                )
+
             # 生成总结
             if len(chunks) == 1:
                 summary = document_summarizer.summarize_chunk(
                     chunks[0],
-                    agent._call_deepseek
+                    governed_document_call
                 )
             else:
                 chunk_summaries = []
                 for i, chunk in enumerate(chunks):
                     chunk_summary = document_summarizer.summarize_chunk(
                         chunk,
-                        agent._call_deepseek
+                        governed_document_call
                     )
                     chunk_summaries.append(chunk_summary)
 
@@ -110,7 +118,7 @@ async def upload_document(
                 if len(combined_text) > 4000:
                     summary = document_summarizer.summarize_chunk(
                         combined_text,
-                        agent._call_deepseek
+                        governed_document_call
                     )
                 else:
                     summary = combined_text
@@ -118,7 +126,7 @@ async def upload_document(
             # 提取关键要点
             key_points = document_summarizer.extract_key_points(
                 content,
-                agent._call_deepseek
+                governed_document_call
             )
 
             # 更新总结结果

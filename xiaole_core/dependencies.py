@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from db_setup import SessionLocal
+from llm_gateway import get_llm_gateway
 
 from .brain import BrainCore
 from .context import CoreContextRepository
@@ -12,15 +13,13 @@ from .gateways.action import ActionGateway
 from .gateways.reminder import ReminderGateway
 from .gateways.memory import MemoryGateway
 from .intent import IntentRouter
-from .models import ModelRouter, OpenAICompatibleProvider
+from .models import DeepSeekGatewayProvider, ModelRouter, OpenAICompatibleProvider
 from .reminders import ReminderOrchestrator
 
 
 @lru_cache(maxsize=1)
 def build_brain_core() -> BrainCore:
-    primary = OpenAICompatibleProvider(
-        "https://api.deepseek.com/chat/completions", os.getenv("DEEPSEEK_API_KEY", ""), os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-    )
+    primary = DeepSeekGatewayProvider(get_llm_gateway())
     fallback = OpenAICompatibleProvider(
         "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", os.getenv("QWEN_API_KEY", ""), os.getenv("QWEN_MODEL", "qwen-plus")
     )

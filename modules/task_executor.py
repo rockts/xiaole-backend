@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 
 from modules.task_manager import TaskManager
 from modules.tool_manager import ToolRegistry
+from llm_gateway import GovernanceUnavailable, get_llm_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class TaskExecutor:
         """
         self.task_manager = task_manager
         self.tool_registry = tool_registry
+        self.llm_gateway = get_llm_gateway()
 
     def execute_task(
         self,
@@ -58,6 +60,22 @@ class TaskExecutor:
                 return {
                     'success': False,
                     'error': f'任务状态无效: {task["status"]}'
+                }
+
+            try:
+                claimed = self.llm_gateway.acquire_execution_lease(
+                    f"task_executor:{task_id}:{task['status']}",
+                    ttl_seconds=300,
+                )
+            except GovernanceUnavailable:
+                return {
+                    'success': False,
+                    'error': '任务治理状态不可用，已安全停止'
+                }
+            if not claimed:
+                return {
+                    'success': False,
+                    'error': f'任务正在被其他执行器处理: {task_id}'
                 }
 
             # 更新任务状态为执行中

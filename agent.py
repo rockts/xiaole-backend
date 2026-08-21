@@ -14,6 +14,10 @@ from error_handler import (
 import os
 from dotenv import load_dotenv
 import requests
+from llm_gateway import (
+    LLMRequest, ProviderError, current_llm_request_id,
+    get_llm_gateway, governed_entrypoint, governed_stream_entrypoint,
+)
 from datetime import datetime
 import re
 import asyncio  # v0.4.0 用于同步执行异步工具调用
@@ -124,9 +128,8 @@ class XiaoLeAgent:
         # 支持多个AI平台
         self.api_type = os.getenv("AI_API_TYPE", "deepseek")
 
-        # DeepSeek配置
-        self.deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-        self.deepseek_url = "https://api.deepseek.com/chat/completions"
+        # DeepSeek requests are governed by the single shared gateway.
+        self.llm_gateway = get_llm_gateway()
 
         # Qwen 备用配置 (阿里云通义千问)
         self.qwen_key = os.getenv("QWEN_API_KEY")
@@ -184,16 +187,16 @@ class XiaoLeAgent:
     def _get_model(self):
         """根据API类型获取模型名称"""
         if self.api_type == "deepseek":
-            return os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+            return "deepseek-v4-flash"
         else:  # claude
             return os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
 
     def _init_client(self):
         """初始化客户端"""
         if self.api_type == "deepseek":
-            if not self.deepseek_key or \
-               self.deepseek_key == "your_deepseek_api_key_here":
-                logger.warning("⚠️  警告: 未配置 DEEPSEEK_API_KEY，使用占位模式")
+            if not self.llm_gateway.api_key or \
+               self.llm_gateway.api_key == "your_deepseek_api_key_here":
+                logger.warning("⚠️  警告: 未配置 DeepSeek 凭证，使用占位模式")
                 return None
             logger.info(f"✅ 使用 DeepSeek API ({self.model})")
             return "deepseek"
@@ -203,8 +206,8 @@ class XiaoLeAgent:
                self.claude_key == "your_claude_api_key_here":
                 logger.warning("⚠️  警告: 未配置 CLAUDE_API_KEY，使用占位模式")
                 # 尝试回退到 DeepSeek
-                if self.deepseek_key and \
-                   self.deepseek_key != "your_deepseek_api_key_here":
+                if self.llm_gateway.api_key and \
+                   self.llm_gateway.api_key != "your_deepseek_api_key_here":
                     logger.info("↩️  回退到 DeepSeek（因缺少 Claude Key）")
                     self.api_type = "deepseek"
                     self.model = self._get_model()
@@ -218,8 +221,8 @@ class XiaoLeAgent:
             except Exception as e:
                 logger.error(f"⚠️  Claude初始化失败: {e}")
                 # 尝试回退到 DeepSeek
-                if self.deepseek_key and \
-                   self.deepseek_key != "your_deepseek_api_key_here":
+                if self.llm_gateway.api_key and \
+                   self.llm_gateway.api_key != "your_deepseek_api_key_here":
                     logger.info("↩️  回退到 DeepSeek（Claude 初始化失败）")
                     self.api_type = "deepseek"
                     self.model = self._get_model()
@@ -229,8 +232,8 @@ class XiaoLeAgent:
 
         logger.warning(f"⚠️  未知的API类型: {self.api_type}")
         # 尝试回退到 DeepSeek
-        if self.deepseek_key and \
-           self.deepseek_key != "your_deepseek_api_key_here":
+        if self.llm_gateway.api_key and \
+           self.llm_gateway.api_key != "your_deepseek_api_key_here":
             logger.info("↩️  回退到 DeepSeek（未知 API 类型）")
             self.api_type = "deepseek"
             self.model = self._get_model()
@@ -302,7 +305,9 @@ class XiaoLeAgent:
 
             # 根据API类型调用
             if self.api_type == "deepseek":
-                reply = self._call_deepseek(system_prompt, prompt)
+                reply = self._call_deepseek(
+                    system_prompt, prompt, caller="legacy.think"
+                )
             elif self.api_type == "claude":
                 reply = self._call_claude(system_prompt, prompt)
             else:
@@ -321,57 +326,27 @@ class XiaoLeAgent:
             logger.error(f"❌ {error_msg}")
             return f"抱歉，我遇到了一些问题：{str(e)}"
 
-    @retry_with_backoff(
-        max_retries=3,
-        initial_delay=1.0,
-        exceptions=(requests.Timeout, requests.ConnectionError)
-    )
-    @handle_api_errors
-    @log_execution
-    def _call_deepseek(self, system_prompt, user_prompt, max_tokens=512):
-        """调用 DeepSeek API（使用连接池）"""
-        logger.info(f"调用 DeepSeek API - Prompt长度: {len(user_prompt)}")
-
-        headers = {
-            "Authorization": f"Bearer {self.deepseek_key}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.5,
-            "max_tokens": max_tokens,
-            "stream": False
-        }
-
-        # v0.9.6: 使用连接池
-        response = self._http_session.post(
-            self.deepseek_url,
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-
-        fallback_category = _deepseek_fallback_category(response.status_code)
-        if fallback_category:
-            logger.warning(
-                "model_primary_failed provider=deepseek category=%s "
-                "request_id=legacy-unavailable fallback=True",
-                fallback_category
-            )
-            return self._call_qwen_fallback(
-                system_prompt, user_prompt, max_tokens
-            )
-
-        response.raise_for_status()
-        result = response.json()
-        reply = result["choices"][0]["message"]["content"]
-        logger.info(f"DeepSeek API 响应成功 - 回复长度: {len(reply)}")
-        return reply
+    def _call_deepseek(
+        self, system_prompt, user_prompt, max_tokens=512,
+        caller="legacy.chat", request_id=None, task_id=None, priority="user"
+    ):
+        """Delegate a Legacy single-turn request to the governed gateway."""
+        import uuid
+        request_id = request_id or current_llm_request_id() or str(uuid.uuid4())
+        try:
+            return self.llm_gateway.complete(LLMRequest(
+                caller=caller, source="legacy", request_id=request_id,
+                task_id=task_id, priority=priority, model=self.model,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                max_output_tokens=max_tokens, temperature=0.5,
+            )).text
+        except ProviderError as exc:
+            if exc.category in {
+                "billing_quota", "rate_limit", "service_unavailable", "transport"
+            }:
+                return self._call_qwen_fallback(system_prompt, user_prompt, max_tokens)
+            raise
 
     def _call_qwen_fallback(self, system_prompt, user_prompt, max_tokens=512):
         """
@@ -415,6 +390,7 @@ class XiaoLeAgent:
         return reply
 
     # v0.9.6: SSE 流式响应方法
+    @governed_stream_entrypoint
     def chat_stream(self, prompt, session_id=None, user_id="default_user",
                     response_style="balanced"):
         """
@@ -551,7 +527,11 @@ class XiaoLeAgent:
 
         return system_prompt
 
-    def _call_deepseek_stream(self, system_prompt, messages, response_style="balanced"):
+    def _call_deepseek_stream(
+        self, system_prompt, messages, response_style="balanced",
+        caller="legacy.chat.stream", request_id=None, task_id=None,
+        priority="user"
+    ):
         """
         v0.9.6: DeepSeek 流式 API 调用
         返回生成器，逐 chunk 输出
@@ -560,61 +540,27 @@ class XiaoLeAgent:
 
         llm_params = self._get_llm_parameters(response_style)
 
-        headers = {
-            "Authorization": f"Bearer {self.deepseek_key}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt}
-            ] + messages,
-            "temperature": llm_params['temperature'],
-            "max_tokens": llm_params['max_tokens'],
-            "stream": True  # 启用流式
-        }
-
-        response = requests.post(
-            self.deepseek_url,
-            headers=headers,
-            json=data,
-            timeout=120,
-            stream=True  # requests 流式
-        )
-
-        fallback_category = _deepseek_fallback_category(response.status_code)
-        if fallback_category:
-            logger.warning(
-                "model_primary_failed provider=deepseek category=%s "
-                "request_id=legacy-unavailable fallback=True stream=True",
-                fallback_category
-            )
-            yield from self._call_qwen_stream_fallback(
-                system_prompt, messages, response_style
-            )
-            return
-
-        response.raise_for_status()
-
-        # 解析 SSE 流
-        for line in response.iter_lines():
-            if line:
-                line = line.decode('utf-8')
-                if line.startswith('data: '):
-                    data_str = line[6:]
-                    if data_str == '[DONE]':
-                        break
-                    try:
-                        import json
-                        chunk_data = json.loads(data_str)
-                        delta = chunk_data.get('choices', [{}])[
-                            0].get('delta', {})
-                        content = delta.get('content', '')
-                        if content:
-                            yield content
-                    except Exception as e:
-                        logger.warning(f"解析流式数据失败: {e}")
+        import uuid
+        request_id = request_id or current_llm_request_id() or str(uuid.uuid4())
+        try:
+            text = self.llm_gateway.complete(LLMRequest(
+                caller=caller, source="legacy", request_id=request_id,
+                task_id=task_id, priority=priority, model=self.model,
+                system=system_prompt, messages=messages,
+                max_output_tokens=llm_params['max_tokens'],
+                temperature=llm_params['temperature'],
+            )).text
+            for offset in range(0, len(text), 32):
+                yield text[offset:offset + 32]
+        except ProviderError as exc:
+            if exc.category in {
+                "billing_quota", "rate_limit", "service_unavailable", "transport"
+            }:
+                yield from self._call_qwen_stream_fallback(
+                    system_prompt, messages, response_style
+                )
+                return
+            raise
 
     def _call_qwen_stream_fallback(self, system_prompt, messages, response_style="balanced"):
         """
@@ -800,7 +746,10 @@ class XiaoLeAgent:
             if self.api_type == "deepseek":
                 result = self._call_deepseek(
                     system_prompt="你是信息提取助手，专门识别和提取用户的关键个人信息。",
-                    user_prompt=extraction_prompt
+                    user_prompt=extraction_prompt,
+                    caller="legacy.memory_extraction",
+                    priority="background",
+                    task_id=f"memory:{hash(user_message)}",
                 )
             else:  # claude
                 result = self._call_claude(
@@ -882,7 +831,10 @@ class XiaoLeAgent:
             if self.api_type == "deepseek":
                 summary = self._call_deepseek(
                     system_prompt="你是对话摘要助手，提取对话中的关键信息。",
-                    user_prompt=summary_prompt
+                    user_prompt=summary_prompt,
+                    caller="legacy.conversation_summary",
+                    priority="background",
+                    task_id=f"summary:{session_id}",
                 )
             else:
                 summary = self._call_claude(
@@ -928,6 +880,7 @@ class XiaoLeAgent:
         '你真聪明': '哈哈，谢谢夸奖！不过我还在不断学习中～',
     }
 
+    @governed_entrypoint
     def chat(self, prompt, session_id=None, user_id="default_user",
              response_style="balanced", image_path=None,
              original_user_prompt=None):
@@ -2331,7 +2284,8 @@ class XiaoLeAgent:
             if self.api_type == "deepseek":
                 result = self._call_deepseek(
                     system_prompt="你是智能工具选择助手，精准识别用户意图并返回JSON格式分析结果。",
-                    user_prompt=analysis_prompt
+                    user_prompt=analysis_prompt,
+                    caller="legacy.tool_selection",
                 )
             else:
                 result = self._call_claude(
@@ -2835,7 +2789,8 @@ class XiaoLeAgent:
             # v0.6.0: 根据API类型调用（传递响应风格）
             if self.api_type == "deepseek":
                 return self._call_deepseek_with_history(
-                    system_prompt, messages, response_style
+                    system_prompt, messages, response_style,
+                    caller="legacy.chat.answer",
                 )
             elif self.api_type == "claude":
                 return self._call_claude_with_history(
@@ -2845,15 +2800,9 @@ class XiaoLeAgent:
         except Exception as e:
             return f"抱歉，我遇到了一些问题：{str(e)}"
 
-    @retry_with_backoff(
-        max_retries=3,
-        initial_delay=1.0,
-        exceptions=(requests.Timeout, requests.ConnectionError)
-    )
-    @handle_api_errors
-    @log_execution
     def _call_deepseek_with_history(
-        self, system_prompt, messages, response_style="balanced"
+        self, system_prompt, messages, response_style="balanced",
+        caller="legacy.chat", request_id=None, task_id=None, priority="user"
     ):
         """
         v0.6.0: DeepSeek API 多轮对话（支持响应风格）
@@ -2869,48 +2818,24 @@ class XiaoLeAgent:
         # v0.6.0: 获取风格参数
         llm_params = self._get_llm_parameters(response_style)
 
-        headers = {
-            "Authorization": f"Bearer {self.deepseek_key}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt}
-            ] + messages,
-            "temperature": llm_params['temperature'],
-            "max_tokens": llm_params['max_tokens'],
-            "top_p": llm_params.get('top_p', 0.9)
-        }
-
-        # v0.9.6: 使用连接池
-        response = self._http_session.post(
-            self.deepseek_url,
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-
-        fallback_category = _deepseek_fallback_category(response.status_code)
-        if fallback_category:
-            logger.warning(
-                "model_primary_failed provider=deepseek category=%s "
-                "request_id=legacy-unavailable fallback=True history=True",
-                fallback_category
-            )
-            return self._call_qwen_with_history_fallback(
-                system_prompt, messages, response_style
-            )
-
-        response.raise_for_status()
-        result = response.json()
-        reply = result["choices"][0]["message"]["content"]
-        logger.info(
-            f"DeepSeek 多轮对话响应成功 - 回复长度: {len(reply)}, "
-            f"风格: {response_style}"
-        )
-        return reply
+        import uuid
+        request_id = request_id or current_llm_request_id() or str(uuid.uuid4())
+        try:
+            return self.llm_gateway.complete(LLMRequest(
+                caller=caller, source="legacy", request_id=request_id,
+                task_id=task_id, priority=priority, model=self.model,
+                system=system_prompt, messages=messages,
+                max_output_tokens=llm_params['max_tokens'],
+                temperature=llm_params['temperature'],
+            )).text
+        except ProviderError as exc:
+            if exc.category in {
+                "billing_quota", "rate_limit", "service_unavailable", "transport"
+            }:
+                return self._call_qwen_with_history_fallback(
+                    system_prompt, messages, response_style
+                )
+            raise
 
     def _call_qwen_with_history_fallback(
         self, system_prompt, messages, response_style="balanced"
@@ -3082,7 +3007,8 @@ class XiaoLeAgent:
         try:
             response = self._call_deepseek(
                 system_prompt="你是任务分析助手，专门识别复杂任务。",
-                user_prompt=prompt
+                user_prompt=prompt,
+                caller="legacy.task_detection",
             )
             # 提取JSON
             import json
@@ -3230,7 +3156,8 @@ class XiaoLeAgent:
                     "请只返回纯JSON数据，不要包含markdown标记。"
                 ),
                 user_prompt=prompt,
-                max_tokens=4096
+                max_tokens=4096,
+                caller="legacy.task_planning",
             )
             # 提取JSON
             import json
@@ -3294,7 +3221,10 @@ class XiaoLeAgent:
 """
         try:
             if self.api_type == "deepseek":
-                result = self._call_deepseek(system_prompt, user_prompt)
+                result = self._call_deepseek(
+                    system_prompt, user_prompt,
+                    caller="legacy.task_confirmation",
+                )
             else:
                 result = self._call_claude(system_prompt, user_prompt)
 

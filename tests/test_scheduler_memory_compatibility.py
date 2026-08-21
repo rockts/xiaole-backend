@@ -23,6 +23,16 @@ class ReminderManagerStub:
     websocket_callback = None
 
 
+class LeaseStub:
+    def __init__(self, decisions=None):
+        self.decisions = list(decisions or [True])
+        self.keys = []
+
+    def acquire_execution_lease(self, key, ttl_seconds):
+        self.keys.append((key, ttl_seconds))
+        return self.decisions.pop(0)
+
+
 class SchedulerMemoryCompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
@@ -58,6 +68,7 @@ class SchedulerMemoryCompatibilityTests(unittest.TestCase):
         scheduler = ReminderScheduler.__new__(ReminderScheduler)
         scheduler.proactive_chat = ProactiveChat()
         scheduler.reminder_manager = ReminderManagerStub()
+        scheduler.llm_gateway = LeaseStub()
         error_log = Mock()
 
         original_error = __import__("scheduler").logger.error
@@ -80,6 +91,17 @@ class SchedulerMemoryCompatibilityTests(unittest.TestCase):
 
         self.assertTrue(result["should_chat"])
         self.assertEqual(result["metadata"]["memory_content"], "一条旧记忆")
+
+    def test_duplicate_hourly_scheduler_execution_is_skipped(self):
+        scheduler = ReminderScheduler.__new__(ReminderScheduler)
+        scheduler.llm_gateway = LeaseStub([True, False])
+        self.assertTrue(scheduler._acquire_job_lease(
+            "check_proactive_chat", "%Y%m%d%H", 3900
+        ))
+        self.assertFalse(scheduler._acquire_job_lease(
+            "check_proactive_chat", "%Y%m%d%H", 3900
+        ))
+        self.assertEqual(len(scheduler.llm_gateway.keys), 2)
 
 
 if __name__ == "__main__":

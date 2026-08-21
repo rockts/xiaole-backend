@@ -7,6 +7,7 @@
 """
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -17,6 +18,7 @@ from modules.proactive_chat import get_proactive_chat
 from memory import MemoryManager
 from pathlib import Path
 from modules.conflict_detector import ConflictDetector
+from llm_gateway import GovernanceUnavailable, get_llm_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +40,23 @@ class ReminderScheduler:
     2. 定期检查行为提醒（每5分钟）
     3. 支持手动触发检查
     """
+    _start_lock = threading.Lock()
 
     def __init__(self):
         self.scheduler = BackgroundScheduler()
         self.reminder_manager = get_reminder_manager()
         self.proactive_chat = get_proactive_chat()
         self.memory_manager = MemoryManager()
+        self.llm_gateway = get_llm_gateway()
         self.is_running = False
 
     def start(self):
         """启动调度器"""
-        if self.is_running:
-            logger.warning("Scheduler is already running")
-            return
+        with self._start_lock:
+            if self.is_running:
+                logger.warning("Scheduler is already running")
+                return
+            self.is_running = True
 
         # 任务1: 每分钟检查时间提醒
         self.scheduler.add_job(
@@ -107,7 +113,6 @@ class ReminderScheduler:
         )
 
         self.scheduler.start()
-        self.is_running = True
         logger.info("Reminder scheduler started")
 
     def stop(self):
@@ -121,6 +126,8 @@ class ReminderScheduler:
 
     def check_time_reminders(self):
         """检查所有用户的时间提醒"""
+        if not self._acquire_job_lease("check_time_reminders", "%Y%m%d%H%M", 90):
+            return
         print("==== FUNCTION ENTERED ====", flush=True)
         logger.info("==== CHECK_TIME_REMINDERS STARTED ====")
         try:
@@ -189,6 +196,8 @@ class ReminderScheduler:
 
     def check_behavior_reminders(self):
         """检查所有用户的行为提醒"""
+        if not self._acquire_job_lease("check_behavior_reminders", "%Y%m%d%H%M", 330):
+            return
         try:
             logger.info("Checking behavior reminders...")
 
@@ -238,6 +247,8 @@ class ReminderScheduler:
 
     def cleanup_expired_reminders(self):
         """清理过期的非重复提醒"""
+        if not self._acquire_job_lease("cleanup_expired", "%Y%m%d", 7200):
+            return
         try:
             logger.info("Cleaning up expired reminders...")
 
@@ -251,6 +262,8 @@ class ReminderScheduler:
 
     def check_proactive_chat(self):
         """检查是否需要发起主动对话"""
+        if not self._acquire_job_lease("check_proactive_chat", "%Y%m%d%H", 3900):
+            return
         try:
             logger.info("Checking proactive chat conditions...")
 
@@ -316,6 +329,8 @@ class ReminderScheduler:
 
     def cleanup_old_memories(self):
         """清理旧记忆 - 每天凌晨4点执行"""
+        if not self._acquire_job_lease("cleanup_old_memories", "%Y%m%d", 7200):
+            return
         try:
             logger.info("Starting memory cleanup...")
 
@@ -332,6 +347,8 @@ class ReminderScheduler:
 
     def run_conflict_detector_job(self):
         """运行记忆冲突检测 - 每天凌晨2点执行，输出到日志文件"""
+        if not self._acquire_job_lease("conflict_detector_daily", "%Y%m%d", 7200):
+            return
         try:
             logger.info("Running conflict detector job...")
             detector = ConflictDetector()
@@ -358,6 +375,24 @@ class ReminderScheduler:
             )
         except Exception as e:
             logger.error(f"Error running conflict detector job: {e}")
+
+    def _acquire_job_lease(
+        self, job_id: str, bucket_format: str, ttl_seconds: int
+    ) -> bool:
+        bucket = datetime.now().strftime(bucket_format)
+        try:
+            acquired = self.llm_gateway.acquire_execution_lease(
+                f"scheduler:{job_id}:{bucket}", ttl_seconds=ttl_seconds
+            )
+        except GovernanceUnavailable:
+            logger.error(
+                "scheduler_governance_unavailable job=%s action=fail_closed",
+                job_id,
+            )
+            return False
+        if not acquired:
+            logger.info("scheduler_duplicate_skipped job=%s bucket=%s", job_id, bucket)
+        return acquired
 
 
 # 全局单例

@@ -10,7 +10,8 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 with patch("sqlalchemy.sql.schema.MetaData.create_all"):
     import agent as agent_module
     from agent import XiaoLeAgent
-    from error_handler import APIError
+from error_handler import APIError
+from llm_gateway import InMemoryLedger, LLMGateway
 if original_database_url is None:
     os.environ.pop("DATABASE_URL", None)
 else:
@@ -45,10 +46,15 @@ class Transport:
 
 def build_agent(response):
     instance = XiaoLeAgent.__new__(XiaoLeAgent)
-    instance.deepseek_key = "deepseek-test-key"
-    instance.deepseek_url = "https://api.deepseek.com/chat/completions"
-    instance.model = "deepseek-chat"
+    instance.model = "deepseek-v4-flash"
     instance._http_session = Transport(response)
+    instance.llm_gateway = LLMGateway(
+        api_key="deepseek-test-key",
+        transport=instance._http_session,
+        ledger=InMemoryLedger(),
+        sleeper=lambda _delay: None,
+        max_retries=0,
+    )
     instance._get_llm_parameters = lambda _style: {
         "temperature": 0.5,
         "max_tokens": 512,
@@ -90,13 +96,12 @@ class LegacyModelFallbackTests(unittest.TestCase):
             return_value=iter(["Qwen ", "stream"])
         )
 
-        with patch.object(agent_module.requests, "post", return_value=Response(402)) as post:
-            result = list(instance._call_deepseek_stream(
-                "system", [{"role": "user", "content": "message"}]
-            ))
+        result = list(instance._call_deepseek_stream(
+            "system", [{"role": "user", "content": "message"}]
+        ))
 
         self.assertEqual(result, ["Qwen ", "stream"])
-        self.assertEqual(post.call_count, 1)
+        self.assertEqual(instance._http_session.calls, 1)
         instance._call_qwen_stream_fallback.assert_called_once()
 
     def test_billing_402_and_qwen_failure_stop_after_one_attempt_each(self):
@@ -105,7 +110,7 @@ class LegacyModelFallbackTests(unittest.TestCase):
             side_effect=RuntimeError("Qwen unavailable")
         )
 
-        with self.assertRaisesRegex(APIError, "Qwen unavailable"):
+        with self.assertRaisesRegex(RuntimeError, "Qwen unavailable"):
             instance._call_deepseek("system", "message")
 
         self.assertEqual(instance._http_session.calls, 1)

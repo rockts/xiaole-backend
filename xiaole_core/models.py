@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 import logging
 import requests
+from llm_gateway import (
+    LLMRequest,
+    LLMGovernanceError,
+    ProviderError,
+)
 
 from .errors import ModelUnavailable
 
@@ -32,9 +37,18 @@ class ModelRouter:
         self.primary, self.fallback = primary, fallback
         self.primary_name, self.fallback_name = primary_name, fallback_name
 
-    def complete(self, system_prompt: str, messages: list[dict], request_id: str) -> ModelResult:
+    def complete(
+        self, system_prompt: str, messages: list[dict], request_id: str,
+        caller: str = "core2.answer"
+    ) -> ModelResult:
         try:
-            return ModelResult(self.primary.complete(system_prompt, messages, request_id), self.primary_name)
+            if hasattr(self.primary, "complete_for"):
+                text = self.primary.complete_for(
+                    system_prompt, messages, request_id, caller
+                )
+            else:
+                text = self.primary.complete(system_prompt, messages, request_id)
+            return ModelResult(text, self.primary_name)
         except ModelError as exc:
             can_fallback = bool(self.fallback) and (exc.retryable or exc.category == "authentication")
             logger.warning(
@@ -59,8 +73,52 @@ class ModelRouter:
             raise ModelUnavailable("model service unavailable") from exc
 
     def classify(self, message: str, history: list[dict], request_id: str) -> str:
-        result = self.complete("Return exactly one of: conversation, knowledge, status, planning, action.", [*history, {"role":"user","content":message}], request_id)
+        result = self.complete(
+            "Return exactly one of: conversation, knowledge, status, planning, action.",
+            [*history, {"role":"user","content":message}], request_id,
+            caller="core2.intent",
+        )
         return result.text.strip().lower()
+
+
+class DeepSeekGatewayProvider:
+    """Core2 adapter for the single governed DeepSeek gateway."""
+
+    def __init__(self, gateway, model="deepseek-v4-flash"):
+        self.gateway = gateway
+        self.model = model
+
+    def complete(self, system_prompt, messages, request_id):
+        return self.complete_for(
+            system_prompt, messages, request_id, "core2.answer"
+        )
+
+    def complete_for(self, system_prompt, messages, request_id, caller):
+        try:
+            return self.gateway.complete(LLMRequest(
+                caller=caller,
+                source="core2",
+                request_id=request_id,
+                priority="user",
+                model=self.model,
+                system=system_prompt,
+                messages=messages,
+                max_output_tokens=1024,
+                temperature=0.3,
+            )).text
+        except ProviderError as exc:
+            raise ModelError(
+                str(exc),
+                retryable=exc.category in {
+                    "billing_quota", "rate_limit", "service_unavailable",
+                    "transport", "invalid_response",
+                },
+                category=exc.category,
+            ) from exc
+        except LLMGovernanceError as exc:
+            raise ModelError(
+                str(exc), retryable=False, category=exc.category
+            ) from exc
 
 
 class OpenAICompatibleProvider:
